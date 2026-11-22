@@ -839,8 +839,11 @@ def auto_wrap_math_symbols(text: str) -> str:
     text = re.sub(r'\b([A-Z][\'\d_]*)\s*\(\s*([-+]?[a-zA-Z0-9_\.]+(?:\s*[;,]\s*[-+]?[a-zA-Z0-9_\.]+){1,3})\s*\)', wrap_coord, text)
 
     # 6. Tọa độ bộ số đơn lập có dấu chấm phẩy: (0; 2), (2; 3; 4), (-1; -3; 5)
+    def wrap_standalone_coord(m):
+        clean_val = re.sub(r'\s*;\s*', '; ', m.group(1).strip())
+        return mask_token(f"$({clean_val})$")
     text = re.sub(r'(?<![A-Za-z0-9_\$])\(\s*([-+]?[a-zA-Z0-9_\.]+(?:\s*;\s*[-+]?[a-zA-Z0-9_\.]+)+)\s*\)',
-                  lambda m: mask_token(f"$({re.sub(r'\s*;\s*', '; ', m.group(1).strip())})$"), text)
+                  wrap_standalone_coord, text)
 
     # 7. Đồ thị (C), (P)...; có đồ thị là (C); của đồ thị (C)
     text = re.sub(r'(?i)\b((?:có\s+)?đồ\s+thị(?:\s+là)?|của\s+đồ\s+thị|đường\s+cong|đường\s+tròn|mặt\s+cầu|mặt\s+phẳng)\s+\(([A-Za-z0-9_]+)\)',
