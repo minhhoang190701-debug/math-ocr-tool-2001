@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Chiếu Đề Thi Toán Học (Offline)</title>
+    <!-- KaTeX CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- Google Fonts for Vietnamese Typography (Be Vietnam Pro) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; font-family: 'Be Vietnam Pro', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif; }
+        #presContainer { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; --pres-font-size: 26px; user-select: none; }
+        .theme-chalkboard { background: radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%); color: #f3f1e7; }
+        .theme-whiteboard { background: #ffffff; color: #0f172a; }
+        .theme-dark { background: #090d16; color: #f8fafc; }
+        .top-bar, .bottom-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1.2rem; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); z-index: 100; flex-wrap: wrap; gap: 0.5rem; }
+        .theme-whiteboard .top-bar, .theme-whiteboard .bottom-bar { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
+        .btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: inherit; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; }
+        .theme-whiteboard .btn { background: #e2e8f0; border-color: #cbd5e1; color: #1e293b; }
+        .btn:hover, .btn.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+        .main-stage { flex: 1; display: flex; justify-content: center; align-items: center; padding: 1.5rem 2.5rem; overflow-y: auto; position: relative; user-select: text; }
+        .slide-card { width: 100%; max-width: 1560px; margin: auto; }
+        .q-badge { background: #ffd84d; color: #183b31; font-weight: 800; font-size: calc(var(--pres-font-size, 24px) * 0.95); padding: 0.35rem 1.2rem; border-radius: 999px; box-shadow: 0 4px 14px rgba(255, 216, 77, 0.35); }
+        .theme-whiteboard .q-badge { background: #f59e0b; color: #000; }
+        .q-body { font-size: var(--pres-font-size, 26px); line-height: 1.6; margin: 1rem 0; text-align: justify; }
+        .image-wrapper { text-align: center; margin: 0.8rem 0; display: flex; justify-content: center; align-items: center; width: 100%; }
+        .image-wrapper img { max-height: var(--pres-img-max-height, 40vh); max-width: 90%; height: auto; border-radius: 8px; box-shadow: none !important; border: 1.5px solid rgba(56, 189, 248, 0.35); background: #fff; padding: 5px; object-fit: contain; cursor: zoom-in; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s ease; }
+        .image-wrapper img:hover { transform: scale(1.02); border-color: rgba(56, 189, 248, 0.85); }
+        .slide-split { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 2.2rem; width: 100%; }
+        .split-left { flex: 1 1 58%; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+        .split-right { flex: 0 0 42%; max-width: 42%; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .split-right .image-wrapper { margin: 0; width: 100%; }
+        .split-right img { max-height: var(--pres-img-max-height, 70vh) !important; max-width: 100% !important; width: clamp(320px, 94%, 100%); height: auto; border-radius: 10px; box-shadow: none !important; border: 1.5px solid rgba(56, 189, 248, 0.35); background: #fff; padding: 8px; cursor: zoom-in; object-fit: contain; image-rendering: -webkit-optimize-contrast; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s ease; }
+        .split-right img:hover { transform: scale(1.02); border-color: rgba(56, 189, 248, 0.85); }
+        img.zoomed-pop { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; z-index: 99999 !important; width: min(92vw, 1750px) !important; max-width: 92vw !important; max-height: 90vh !important; height: auto !important; object-fit: contain !important; box-shadow: none !important; border: 2px solid rgba(56, 189, 248, 0.75) !important; cursor: zoom-out !important; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), max-height 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important; background: #fff !important; border-radius: 10px !important; image-rendering: -webkit-optimize-contrast !important; pointer-events: auto !important; }
+        .pres-table-wrapper { margin: 1rem auto; width: 100%; display: flex; flex-direction: column; align-items: center; overflow-x: auto; max-width: 100%; }
+        .pres-table-badge-bar { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 0.5rem; }
+        .pres-table-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; font-weight: 700; color: #38bdf8; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.35); padding: 3px 12px; border-radius: 999px; }
+        .pres-math-table { border-collapse: separate; border-spacing: 0; margin: 0.2rem auto; background: rgba(15, 23, 42, 0.65); border-radius: 10px; overflow: hidden; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); border: 2px solid rgba(56, 189, 248, 0.35); max-width: 100%; font-size: calc(var(--pres-font-size, 26px) * 0.88); line-height: 1.4; }
+        .theme-whiteboard .pres-math-table { background: #ffffff; border-color: #94a3b8; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+        .pres-math-table th, .pres-math-table td { border-right: 1.5px solid rgba(255, 255, 255, 0.18); border-bottom: 1.5px solid rgba(255, 255, 255, 0.18); padding: 10px 18px; text-align: center; vertical-align: middle; white-space: nowrap; }
+        .pres-math-table th:last-child, .pres-math-table td:last-child { border-right: none; }
+        .pres-math-table tr:last-child td { border-bottom: none; }
+        .theme-whiteboard .pres-math-table th, .theme-whiteboard .pres-math-table td { border-right-color: #e2e8f0; border-bottom-color: #e2e8f0; color: #0f172a; }
+        .pres-math-table th { background: rgba(14, 165, 233, 0.22); color: #7dd3fc; font-weight: 700; }
+        .theme-whiteboard .pres-math-table th { background: #f1f5f9; color: #1e293b; }
+        .pres-math-table td { color: #f8fafc; font-weight: 600; }
+        .pres-math-table tr:hover td { background: rgba(255, 255, 255, 0.06); }
+        .theme-whiteboard .pres-math-table tr:hover td { background: #f8fafc; }
+        @media (max-width: 960px) { .slide-split { flex-direction: column; gap: 1.2rem; } .split-left, .split-right { flex: 1 1 100%; max-width: 100%; } .split-right img { max-height: 40vh !important; } }
+        .choices-grid { display: grid; gap: 0.9rem; margin-top: 1.2rem; }
+        .choices-grid.layout-grid-4 { grid-template-columns: repeat(4, 1fr); }
+        @media (max-width: 992px) { .choices-grid.layout-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        .choices-grid.layout-grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .choices-grid.layout-grid-1 { grid-template-columns: 1fr; }
+        .choice-item { padding: 0.85rem 1.2rem; border-radius: 10px; background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.16); font-size: calc(var(--pres-font-size, 24px) * 0.92); cursor: pointer; display: flex; align-items: center; gap: 0.75rem; color: inherit; transition: all 0.15s ease; }
+        .choice-item .katex { white-space: nowrap !important; }
+        .theme-whiteboard .choice-item { background: #f8fafc; border-color: #e2e8f0; }
+        .choice-item:hover { border-color: #ffd84d; background: rgba(255, 216, 77, 0.08); transform: translateY(-2px); }
+        .choice-item.correct { border-color: #34d399 !important; background: rgba(16, 185, 129, 0.25) !important; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45) !important; color: #ffffff !important; }
+        .solution-box { margin-top: 1.5rem; background: rgba(255, 255, 255, 0.06); border: 1.5px solid #ffd84d; border-radius: 10px; padding: 1rem 1.4rem; font-size: calc(var(--pres-font-size, 24px) * 0.85); display: none; color: #f3f1e7; animation: presFadeIn 0.25s ease; }
+        .theme-whiteboard .solution-box { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.35); color: #0f172a; }
+        .solution-box.show { display: block; }
+        #blackout { position: absolute; inset: 0; background: #000; z-index: 99998; display: none; justify-content: center; align-items: center; color: #64748b; font-size: 1.2rem; cursor: pointer; }
+        #canvasDraw { position: absolute; inset: 0; z-index: 99990; pointer-events: none; }
+        #canvasDraw.active { pointer-events: auto; cursor: crosshair; }
+        #laser { position: fixed; width: 16px; height: 16px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 16px 6px rgba(239,68,68,0.85); pointer-events: none; z-index: 99995; transform: translate(-50%, -50%); display: none; }
+        .progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: linear-gradient(90deg, #6366f1, #10b981); transition: width 0.2s; z-index: 1000; }
+        @keyframes presFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="presContainer" class="theme-chalkboard">
+        <div id="blackout" onclick="toggleBlackout()"><span>[ ĐÃ TẮT MÀN HÌNH — Bấm phím B để bật lại ]</span></div>
+        <canvas id="canvasDraw"></canvas>
+        <div id="laser"></div>
+
+        <div class="top-bar">
+            <span style="font-weight:700; font-size:1rem;">🎬 Trình Chiếu Đề Thi Toán</span>
+            <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                <button class="btn" onclick="cycleTheme()" id="btnTheme">🎨 Bảng phấn</button>
+                <button class="btn" onclick="zoomFont(-2)">A-</button>
+                <button class="btn" onclick="resetFont()">Tự động</button>
+                <button class="btn" onclick="zoomFont(2)">A+</button>
+                <button class="btn" onclick="cycleLayout()" id="btnLayout">⊞ Bố cục</button>
+                <button class="btn active" onclick="toggleSplit()" id="btnSplit" style="color:#38bdf8; font-weight:700;">🖼️ 2 Cột: Bật</button>
+                <button class="btn" onclick="toggleSolution()" id="btnSol">💡 Lời giải & Đáp án</button>
+                <button class="btn" onclick="toggleDrawing()" id="btnDraw">✏️ Bút vẽ</button>
+                <button class="btn" onclick="clearDrawing()" id="btnClearDraw" style="display:none;">🗑️ Xóa</button>
+                <button class="btn" onclick="toggleLaser()" id="btnLaser">🔴 Laser</button>
+                <button class="btn" onclick="toggleBlackout()">⬛ Màn đen</button>
+                <button class="btn" onclick="toggleFullscreen()">⛶ Toàn màn hình</button>
+            </div>
+        </div>
+
+        <div class="main-stage">
+            <div class="slide-card" id="slideCard"></div>
+        </div>
+
+        <div class="bottom-bar">
+            <button class="btn" onclick="prevSlide()" style="padding:0.45rem 1rem;">◀ Câu trước (←)</button>
+            <div style="display:flex; align-items:center; gap:0.8rem;">
+                <select id="jumpSelect" onchange="jumpTo(this.value)" style="background:rgba(255,255,255,0.15); color:inherit; border:1px solid rgba(255,255,255,0.3); padding:0.35rem 0.6rem; border-radius:6px; font-weight:600; outline:none;"></select>
+                <span id="counter" style="font-weight:700;"></span>
+                <span style="font-size:0.75rem; opacity:0.65;">[←/→]: Đổi slide • [Space / A]: Đáp án • [B]: Màn đen</span>
+            </div>
+            <button class="btn" onclick="nextSlide()" style="padding:0.45rem 1.1rem; background:#6366f1; color:#fff;">Câu sau (→) ▶</button>
+        </div>
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <script>
+        const slides = /*__SLIDES_DATA__*/[];
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizeInputText(str) {
+            if (!str) return '';
+            return String(str)
+                .normalize('NFC')
+                .replace(/[\u2212\u2013\u2014]/g, '-')
+                .replace(/[\u201c\u201d]/g, '"')
+                .replace(/[\u2018\u2019]/g, "'");
+        }
+
+        function visibleLength(text) {
+            if (!text) return 0;
+            return String(text)
+                .replace(/\$\$[\s\S]*?\$\$/g, (m) => m.slice(2, -2).replace(/sqrt|căn|\\[a-zA-Z]+|[(){}^_*]/g, ''))
+                .replace(/\$([^$]*)\$/g, (m, x) => x.replace(/sqrt|căn|\\[a-zA-Z]+|[(){}^_*]/g, ''))
+                .replace(/\\\[[\s\S]*?\\\]/g, '')
+                .replace(/\\\(.*?\\\)/g, '')
+                .replace(/\s+/g, ' ')
+                .trim().length;
+        }
+
+        function autoWrapOfflineMath(text) {
+            if (!text) return '';
+            text = text.replace(/(?<!\$)\\(?:frac|dfrac|tfrac)\{([^{}]+)\}\{([^{}]+)\}(?!\$)/g, '$\\frac{$1}{$2}$');
+            text = text.replace(/(?<!\$)\\(?:sqrt)(?:\[[^\]]*\])?\{([^{}]+)\}(?!\$)/g, '$$&$');
+            text = text.replace(/(?<!\$)\\(?:vec|overrightarrow)\{([^{}]+)\}(?!\$)/g, '$$&$');
+            text = text.replace(/(?<![\$\w])([a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+(?:\s*[,;]\s*[a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+)*)(?![\$\w])/g, '$$1$');
+            return text;
+        }
+
+        function richPresMath(text) {
+            if (!text) return '';
+            const norm = autoWrapOfflineMath(normalizeInputText(text));
+            const mathRegex = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g;
+            let out = '';
+            let lastIndex = 0;
+            let m;
+
+            const renderMathFragment = (rawLatex, isDisplay) => {
+                let latex = rawLatex.trim();
+                if (!latex.includes('\\le') && latex.includes('<=')) latex = latex.replace(/<=/g, ' \\le ');
+                if (!latex.includes('\\ge') && latex.includes('>=')) latex = latex.replace(/>=/g, ' \\ge ');
+                if (!latex.includes('\\ne') && latex.includes('!=')) latex = latex.replace(/!=/g, ' \\ne ');
+                if (!latex.includes('\\Leftrightarrow') && latex.includes('<=>')) latex = latex.replace(/<=>/g, ' \\Leftrightarrow ');
+                if (!latex.includes('\\Rightarrow') && latex.includes('=>')) latex = latex.replace(/=>/g, ' \\Rightarrow ');
+                if (!latex.includes('\\pm') && latex.includes('+-')) latex = latex.replace(/\\+-/g, ' \\pm ');
+
+                latex = latex.replace(/_\{([a-zA-Zà-ỹÀ-Ỹ\s]+)\}/g, (match, inner) => {
+                    if (/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/.test(inner) && !inner.startsWith('\\text')) {
+                        return '_{\\text{' + inner.trim() + '}}';
+                    }
+                    return match;
+                });
+
+                if (window.katex && typeof window.katex.renderToString === 'function') {
+                    try {
+                        return window.katex.renderToString(latex, {
+                            throwOnError: false,
+                            displayMode: isDisplay,
+                            strict: 'ignore',
+                            trust: false
+                        });
+                    } catch (err) {
+                        return '<span class="tex-err">' + escapeHtml(latex) + '</span>';
+                    }
+                }
+                return '<code>' + escapeHtml(latex) + '</code>';
+            };
+
+            const formatTextFragment = (txt) => {
+                if (!txt) return '';
+                return escapeHtml(txt)
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/__([^_]+)__/g, '<u>$1</u>')
+                    .replace(/\n/g, '<br>');
+            };
+
+            while ((m = mathRegex.exec(norm)) !== null) {
+                const before = norm.slice(lastIndex, m.index);
+                if (before) out += formatTextFragment(before);
+                const token = m[0];
+                let latex = '';
+                let isDisplay = false;
+                if (token.startsWith('$$') && token.endsWith('$$')) {
+                    latex = token.slice(2, -2);
+                    isDisplay = true;
+                } else if (token.startsWith('\\[') && token.endsWith('\\]')) {
+                    latex = token.slice(2, -2);
+                    isDisplay = true;
+                } else if (token.startsWith('\\(') && token.endsWith('\\)')) {
+                    latex = token.slice(2, -2);
+                    isDisplay = false;
+                } else if (token.startsWith('$') && token.endsWith('$')) {
+                    latex = token.slice(1, -1);
+                    isDisplay = false;
+                }
+                out += renderMathFragment(latex, isDisplay);
+                lastIndex = m.index + token.length;
+            }
+            const rest = norm.slice(lastIndex);
+            if (rest) out += formatTextFragment(rest);
+            return out;
+        }
+
+        let currentIdx = 0;
+        let fontSize = 26;
+        let customFontManual = false;
+        let choiceLayout = 'auto'; // 'auto', 'grid-2', 'grid-1', 'grid-4'
+        let splitLayout = true;
+        let themeIdx = 0;
+        const themes = ['theme-chalkboard', 'theme-whiteboard', 'theme-dark'];
+        const themeNames = ['🎨 Bảng phấn', '🎨 Bảng trắng', '🎨 Nền tối'];
+        let solVisible = false;
+        let isLaser = false;
+        let isDrawing = false;
+        let canvas, ctx, isMouseDown = false, lx = 0, ly = 0;
+
+        function toggleSplit() {
+            splitLayout = !splitLayout;
+            const btn = document.getElementById('btnSplit');
+            if (btn) {
+                btn.classList.toggle('active', splitLayout);
+                btn.innerHTML = splitLayout ? '🖼️ 2 Cột: Bật' : '🖼️ 2 Cột: Tắt';
+            }
+            renderSlide();
+        }
+
+        function autoFitSlide(s) {
+            if (customFontManual) return;
+            const vh = window.innerHeight || 800;
+            const qLen = (s.questionText || '').replace(/___PRES_IMAGE___/g, '').length;
+            const hasImg = !!s.imageData;
+            const screenMultiplier = vh >= 1000 ? 1.25 : (vh >= 850 ? 1.12 : 1.0);
+            let target = 26;
+            let imgH = '40vh';
+            if (!hasImg) {
+                if (qLen < 120) target = Math.round(36 * screenMultiplier);
+                else if (qLen < 260) target = Math.round(30 * screenMultiplier);
+                else target = Math.round(24 * screenMultiplier);
+            } else if (splitLayout) {
+                if (qLen < 160) { target = Math.round(30 * screenMultiplier); imgH = '70vh'; }
+                else if (qLen < 320) { target = Math.round(26 * screenMultiplier); imgH = '68vh'; }
+                else { target = Math.round(23 * screenMultiplier); imgH = '64vh'; }
+            } else {
+                if (qLen < 150) { target = Math.round(27 * screenMultiplier); imgH = '38vh'; }
+                else { target = Math.round(22 * screenMultiplier); imgH = '30vh'; }
+            }
+            fontSize = Math.max(18, Math.min(44, target));
+            const c = document.getElementById('presContainer');
+            if (c) {
+                c.style.setProperty('--pres-font-size', fontSize + 'px');
+                c.style.setProperty('--pres-img-max-height', imgH);
+            }
+        }
+
+        function getLayoutClass(s, isSplit = false) {
+            if (choiceLayout !== 'auto') return 'layout-' + choiceLayout;
+            if (!s.choices || s.choices.length === 0) return 'layout-grid-4';
+            const maxLen = Math.max(...s.choices.map(c => visibleLength(c.text)));
+            const hasTallMath = s.choices.some(c => /\\frac|\\int|\\sum|\\sqrt|\\begin\{cases\}|\\matrix/i.test(c.text || ''));
+            const hasNewline = s.choices.some(c => (c.text || '').includes('\n'));
+            if (isSplit) {
+                if (hasNewline || maxLen > 28) return 'layout-grid-1';
+                if (hasTallMath || maxLen > 10) return 'layout-grid-2';
+                return 'layout-grid-4';
+            } else {
+                if (hasNewline || maxLen > 34) return 'layout-grid-1';
+                if (hasTallMath || maxLen > 14) return 'layout-grid-2';
+                return 'layout-grid-4';
+            }
+        }
+
+        function cycleLayout() {
+            const modes = ['auto', 'grid-2', 'grid-1', 'grid-4'];
+            const names = {'auto': '⊞ Bố cục: Tự động', 'grid-2': '⊞ Bố cục: 2x2', 'grid-1': '☰ Bố cục: 4 Dọc', 'grid-4': '⊞ Bố cục: 4 Ngang'};
+            const nextIdx = (modes.indexOf(choiceLayout) + 1) % modes.length;
+            choiceLayout = modes[nextIdx];
+            const btn = document.getElementById('btnLayout');
+            if (btn) btn.innerHTML = names[choiceLayout];
+            renderSlide();
+        }
+
+        function buildOfflineTableHtml(rows) {
+            if (!rows || rows.length === 0) return '';
+            let parsedRows = [];
+            let separatorIdx = -1;
+            rows.forEach((rowStr, rIdx) => {
+                let cleanRow = rowStr.replace(/^\s*\|/, '').replace(/\|\s*$/, '');
+                let cells = cleanRow.split('|').map(c => c.trim());
+                if (cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c))) {
+                    separatorIdx = rIdx;
+                } else {
+                    parsedRows.push({ cells: cells });
+                }
+            });
+            if (parsedRows.length === 0) return '';
+            let thead = '', tbody = '';
+            const hasHeader = separatorIdx > 0 || (parsedRows.length >= 2);
+            parsedRows.forEach((r, idx) => {
+                const isHead = (hasHeader && idx === 0);
+                let rowHtml = '';
+                r.cells.forEach(c => {
+                    let cellVal = c.trim();
+                    if (!cellVal.includes('$') && /^[\s*\[\(]-?\d+[\.,]?\d*[;,]-?\d+[\.,]?\d*[\]\)]/.test(cellVal)) {
+                        cellVal = '$' + cellVal + '$';
+                    }
+                    const formatted = richPresMath(cellVal);
+                    rowHtml += isHead ? '<th>' + formatted + '</th>' : '<td>' + formatted + '</td>';
+                });
+                if (isHead) thead += '<tr>' + rowHtml + '</tr>';
+                else tbody += '<tr>' + rowHtml + '</tr>';
+            });
+            return '<div class="pres-table-wrapper"><div class="pres-table-badge-bar"><span class="pres-table-badge">📊 Bảng số liệu ghép nhóm</span></div><table class="pres-math-table">' + (thead ? '<thead>' + thead + '</thead>' : '') + '<tbody>' + tbody + '</tbody></table></div>';
+        }
+
+        function renderOfflineQuestionText(text) {
+            if (!text) return '';
+            let processed = text.replace(/\|\s*\|\s*/g, '|\n|');
+            const lines = processed.split('\n');
+            let outputParts = [];
+            let tableBuf = [];
+            const flush = () => {
+                if (tableBuf.length > 0) {
+                    if (tableBuf.filter(r => (r.match(/\|/g) || []).length >= 2).length >= 1) {
+                        outputParts.push(buildOfflineTableHtml(tableBuf));
+                    } else {
+                        tableBuf.forEach(l => outputParts.push(richPresMath(l)));
+                    }
+                    tableBuf = [];
+                }
+            };
+            lines.forEach(l => {
+                const t = l.trim();
+                if (t.startsWith('|') && (t.match(/\|/g) || []).length >= 2) tableBuf.push(t);
+                else { flush(); if (t) outputParts.push(richPresMath(t)); }
+            });
+            flush();
+            let res = '';
+            outputParts.forEach(p => {
+                if (p.includes('class="pres-table-wrapper"')) res += p;
+                else res += (res && !res.endsWith('</div>') ? '<br>' : '') + p;
+            });
+            return res;
+        }
+
+        function renderSlide() {
+            if (!slides || slides.length === 0) return;
+            const s = slides[currentIdx];
+            autoFitSlide(s);
+            solVisible = false;
+            clearDrawing();
+            
+            const src = s.imageData ? (s.imageData.base64 || s.imageData.dataUrl || '') : '';
+            let isTableOrWide = false;
+            if (s.imageData) {
+                const descLower = (s.imageData.desc || '').toLowerCase();
+                const qTextLower = (s.questionText || '').toLowerCase();
+                if (s.imageData.isTable || descLower.includes('bảng') || descLower.includes('table') || descLower.includes('biến thiên') || descLower.includes('xét dấu') || descLower.includes('tần số') || descLower.includes('ghép nhóm') || qTextLower.includes('bảng sau') || qTextLower.includes('cho bởi bảng')) {
+                    isTableOrWide = true;
+                }
+            }
+            const isSplit = !!(src && splitLayout && !isTableOrWide);
+            let html = '';
+
+            if (isSplit) {
+                let cleanText = (s.questionText || '').replace(/___PRES_IMAGE___/g, '').trim();
+                cleanText = cleanText.replace(/\n{3,}/g, '\n\n');
+                const qBodyHtml = renderOfflineQuestionText(cleanText);
+
+                let leftHtml = '<div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:1rem;">';
+                leftHtml += '<span class="q-badge">' + escapeHtml(s.title) + '</span>';
+                leftHtml += '<span style="font-size:0.95rem; opacity:0.75;">Câu ' + (currentIdx + 1) + ' / ' + slides.length + '</span></div>';
+                leftHtml += '<div class="q-body">' + qBodyHtml + '</div>';
+
+                if (s.choices && s.choices.length > 0) {
+                    const lClass = getLayoutClass(s, true);
+                    leftHtml += '<div class="choices-grid ' + lClass + '">';
+                    s.choices.forEach((c, idx) => {
+                        leftHtml += '<div class="choice-item" id="c_' + idx + '" onclick="this.classList.toggle(\'correct\')">';
+                        leftHtml += '<strong style="min-width:30px; font-size:1.1rem; color:#ffd84d;">' + escapeHtml(c.label) + '</strong>';
+                        leftHtml += '<div style="flex:1;">' + richPresMath(c.text) + '</div></div>';
+                    });
+                    leftHtml += '</div>';
+                }
+
+                if (s.solution) {
+                    leftHtml += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(s.solution) + '</div>';
+                }
+
+                let rightHtml = '<div class="image-wrapper"><img src="' + src + '" title="Click để phóng to cực đại" onclick="this.classList.toggle(\'zoomed-pop\')"></div>';
+
+                html = '<div class="slide-split"><div class="split-left">' + leftHtml + '</div><div class="split-right">' + rightHtml + '</div></div>';
+            } else {
+                let imgHtml = '';
+                if (src) {
+                    imgHtml = '<div class="image-wrapper"><img src="' + src + '" title="Click để phóng to" onclick="this.classList.toggle(\'zoomed-pop\')"></div>';
+                }
+
+                let qBodyHtml = '';
+                if (s.questionText.includes('___PRES_IMAGE___')) {
+                    const parts = s.questionText.split('___PRES_IMAGE___');
+                    const before = renderOfflineQuestionText(parts[0].trim());
+                    const after = parts.slice(1).map(p => renderOfflineQuestionText(p.trim())).join('<br>');
+                    qBodyHtml = (before ? '<div style="margin-bottom:0.6rem;">' + before + '</div>' : '') +
+                                imgHtml +
+                                (after ? '<div style="margin-top:0.6rem;">' + after + '</div>' : '');
+                } else {
+                    qBodyHtml = renderOfflineQuestionText(s.questionText) + imgHtml;
+                }
+
+                html = '<div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:1rem;">';
+                html += '<span class="q-badge">' + escapeHtml(s.title) + '</span>';
+                html += '<span style="font-size:0.95rem; opacity:0.75;">Câu ' + (currentIdx + 1) + ' / ' + slides.length + '</span></div>';
+                html += '<div class="q-body">' + qBodyHtml + '</div>';
+                
+                if (s.choices && s.choices.length > 0) {
+                    const lClass = getLayoutClass(s, false);
+                    html += '<div class="choices-grid ' + lClass + '">';
+                    s.choices.forEach((c, idx) => {
+                        html += '<div class="choice-item" id="c_' + idx + '" onclick="this.classList.toggle(\'correct\')">';
+                        html += '<strong style="min-width:30px; font-size:1.1rem; color:#ffd84d;">' + escapeHtml(c.label) + '</strong>';
+                        html += '<div style="flex:1;">' + richPresMath(c.text) + '</div></div>';
+                    });
+                    html += '</div>';
+                }
+                
+                if (s.solution) {
+                    html += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(s.solution) + '</div>';
+                }
+            }
+
+            document.getElementById('slideCard').innerHTML = html;
+            
+            if (window.renderMathInElement) {
+                renderMathInElement(document.getElementById('slideCard'), {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false},
+                    ],
+                    throwOnError: false
+                });
+            }
+            
+            document.getElementById('counter').textContent = (currentIdx + 1) + ' / ' + slides.length;
+            document.getElementById('jumpSelect').value = currentIdx;
+            document.getElementById('progressBar').style.width = (((currentIdx + 1) / slides.length) * 100) + '%';
+            
+            const btnSol = document.getElementById('btnSol');
+            if (btnSol) {
+                btnSol.classList.remove('active');
+                btnSol.innerHTML = s.solution ? '💡 Lời giải & Đáp án' : '💡 Đáp án';
+            }
+        }
+
+        function nextSlide() { if (currentIdx < slides.length - 1) { currentIdx++; renderSlide(); } }
+        function prevSlide() { if (currentIdx > 0) { currentIdx--; renderSlide(); } }
+        function jumpTo(val) { currentIdx = parseInt(val, 10); renderSlide(); }
+        
+        function toggleSolution() {
+            solVisible = !solVisible;
+            const box = document.getElementById('solBox');
+            if (box) {
+                if (solVisible) box.classList.add('show');
+                else box.classList.remove('show');
+            }
+            const s = slides[currentIdx];
+            if (s && s.choices) {
+                s.choices.forEach((c, i) => {
+                    const el = document.getElementById('c_' + i);
+                    if (el && c.isCorrect) {
+                        if (solVisible) el.classList.add('correct');
+                        else el.classList.remove('correct');
+                    }
+                });
+            }
+            const btn = document.getElementById('btnSol');
+            if (btn) {
+                if (solVisible) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '💡 Ẩn đáp án';
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerHTML = (s && s.solution) ? '💡 Lời giải & Đáp án' : '💡 Đáp án';
+                }
+            }
+        }
+
+        function cycleTheme() {
+            const c = document.getElementById('presContainer');
+            c.classList.remove(...themes);
+            themeIdx = (themeIdx + 1) % themes.length;
+            c.classList.add(themes[themeIdx]);
+            document.getElementById('btnTheme').textContent = themeNames[themeIdx];
+        }
+
+        function zoomFont(delta) {
+            customFontManual = true;
+            fontSize = Math.max(16, Math.min(60, fontSize + delta));
+            document.getElementById('presContainer').style.setProperty('--pres-font-size', fontSize + 'px');
+        }
+
+        function resetFont() {
+            customFontManual = false;
+            renderSlide();
+        }
+
+        function toggleBlackout() {
+            const b = document.getElementById('blackout');
+            b.style.display = b.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        function toggleLaser() {
+            isLaser = !isLaser;
+            const laser = document.getElementById('laser');
+            laser.style.display = isLaser ? 'block' : 'none';
+            document.getElementById('btnLaser').classList.toggle('active', isLaser);
+            if (isLaser) {
+                window.onmousemove = (e) => {
+                    laser.style.left = e.clientX + 'px';
+                    laser.style.top = e.clientY + 'px';
+                };
+            } else {
+                window.onmousemove = null;
+            }
+        }
+
+        function toggleDrawing() {
+            isDrawing = !isDrawing;
+            document.getElementById('canvasDraw').classList.toggle('active', isDrawing);
+            document.getElementById('btnDraw').classList.toggle('active', isDrawing);
+            document.getElementById('btnClearDraw').style.display = isDrawing ? 'inline-flex' : 'none';
+        }
+
+        function clearDrawing() { if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+        window.onload = function() {
+            canvas = document.getElementById('canvasDraw');
+            if (canvas) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                ctx = canvas.getContext('2d');
+                window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+
+                canvas.onmousedown = (e) => { if (!isDrawing) return; isMouseDown = true; lx = e.clientX; ly = e.clientY; };
+                canvas.onmousemove = (e) => {
+                    if (!isDrawing || !isMouseDown) return;
+                    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(e.clientX, e.clientY);
+                    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.stroke();
+                    lx = e.clientX; ly = e.clientY;
+                };
+                window.onmouseup = () => { isMouseDown = false; };
+            }
+
+            const sel = document.getElementById('jumpSelect');
+            if (sel) {
+                sel.innerHTML = slides.map((s, idx) => '<option value="' + idx + '">Câu ' + (idx + 1) + ': ' + escapeHtml(s.title || '') + '</option>').join('');
+            }
+            renderSlide();
+        };
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'Escape': {
+                    const pop = document.querySelector('img.zoomed-pop');
+                    if (pop) {
+                        pop.classList.remove('zoomed-pop');
+                        e.preventDefault();
+                    }
+                    break;
+                }
+                case 'ArrowRight': case 'PageDown': nextSlide(); break;
+                case ' ': {
+                    // Phím Space: Ẩn/Hiện đáp án & Lời giải
+                    toggleSolution();
+                    e.preventDefault();
+                    break;
+                }
+                case 'ArrowLeft': case 'PageUp': prevSlide(); break;
+                case 'b': case 'B': toggleBlackout(); break;
+                case 'a': case 'A': case 's': case 'S': toggleSolution(); break;
+                case 'l': case 'L': toggleLaser(); break;
+                case 'p': case 'P': toggleDrawing(); break;
+                case 'c': case 'C': toggleSplit(); break;
+                case 'f': case 'F': toggleFullscreen(); break;
+            }
+        });
+    </script>
+</body>
+</html>
