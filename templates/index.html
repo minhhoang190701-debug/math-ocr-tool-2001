@@ -1302,8 +1302,21 @@
             border-radius: 10px;
             padding: 1rem 1.4rem;
             font-size: calc(var(--pres-font-size, 24px) * 0.85);
+            max-height: 72vh;
+            overflow-y: auto;
             display: none;
             animation: presFadeIn 0.25s ease;
+        }
+
+        .pres-solution-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .pres-solution-box::-webkit-scrollbar-thumb {
+            background: rgba(255, 216, 77, 0.35);
+            border-radius: 4px;
+        }
+        .pres-solution-box::-webkit-scrollbar-track {
+            background: transparent;
         }
 
         .pres-theme-chalkboard .pres-solution-box {
@@ -3445,7 +3458,14 @@
 
             const renderMathFragment = (rawLatex, isDisplay) => {
                 let latex = rawLatex.trim();
-                // Chuẩn hóa một số ký hiệu toán phổ biến nếu người dùng gõ tự nhiên không có backslash
+                // 1. Tách dấu câu kết thúc câu (., :, ;, ?, !) ra ngoài công thức toán để hiển thị chuẩn xác
+                let trailingPunct = '';
+                if (/[.,;:?!]$/.test(latex) && !/\\(?:dots|ldots|cdots)$/.test(latex)) {
+                    trailingPunct = latex.slice(-1);
+                    latex = latex.slice(0, -1).trim();
+                }
+
+                // 2. Chuẩn hóa một số ký hiệu toán phổ biến nếu người dùng gõ tự nhiên không có backslash
                 if (!latex.includes('\\le') && latex.includes('<=')) latex = latex.replace(/<=/g, ' \\le ');
                 if (!latex.includes('\\ge') && latex.includes('>=')) latex = latex.replace(/>=/g, ' \\ge ');
                 if (!latex.includes('\\ne') && latex.includes('!=')) latex = latex.replace(/!=/g, ' \\ne ');
@@ -3453,7 +3473,13 @@
                 if (!latex.includes('\\Rightarrow') && latex.includes('=>')) latex = latex.replace(/=>/g, ' \\Rightarrow ');
                 if (!latex.includes('\\pm') && latex.includes('+-')) latex = latex.replace(/\+-/g, ' \\pm ');
 
-                // Chuẩn hóa chỉ số dưới tiếng Việt (ví dụ: _{CĐ} -> _{\text{CĐ}}, _{CT} -> _{\text{CT}}, _{đáy} -> _{\text{đáy}})
+                // 3. Chuẩn hóa prime (T^{\prime} -> T', T^\prime -> T', \prime -> ')
+                latex = latex.replace(/\^\{\\prime\}/g, "'").replace(/\^\\prime/g, "'").replace(/\\prime/g, "'");
+
+                // 4. Tự động sửa phân số bị mất ngoặc mẫu số: \frac{30}x -> \frac{30}{x}
+                latex = latex.replace(/\\(frac|dfrac|tfrac)\{([^{}]+)\}([a-zA-Z0-9])/g, '\\$1{$2}{$3}');
+
+                // 5. Chuẩn hóa chỉ số dưới tiếng Việt (ví dụ: _{CĐ} -> _{\text{CĐ}}, _{CT} -> _{\text{CT}}, _{đáy} -> _{\text{đáy}})
                 latex = latex.replace(/_\{([a-zA-Zà-ỹÀ-Ỹ\s]+)\}/g, (match, inner) => {
                     if (/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/.test(inner) && !inner.startsWith('\\text')) {
                         return '_{\\text{' + inner.trim() + '}}';
@@ -3461,19 +3487,38 @@
                     return match;
                 });
 
+                // 6. KHIÊN BẢO VỆ CÂN BẰNG NGOẶC NHỌN CHỐNG LỖI KATEX ĐỎ LÒM:
+                const cleanForBraces = latex.replace(/\\[{}]/g, '');
+                let openB = (cleanForBraces.match(/\{/g) || []).length;
+                let closeB = (cleanForBraces.match(/\}/g) || []).length;
+                if (openB > closeB) {
+                    if (latex.startsWith('{') && openB - closeB === 1) {
+                        latex = latex.slice(1);
+                    } else {
+                        latex = latex + '}'.repeat(openB - closeB);
+                    }
+                } else if (closeB > openB) {
+                    if (latex.endsWith('}') && closeB - openB === 1) {
+                        latex = latex.slice(0, -1);
+                    } else {
+                        latex = '{'.repeat(closeB - openB) + latex;
+                    }
+                }
+
                 if (window.katex && typeof window.katex.renderToString === 'function') {
                     try {
-                        return window.katex.renderToString(latex, {
+                        const html = window.katex.renderToString(latex, {
                             throwOnError: false,
                             displayMode: isDisplay,
                             strict: 'ignore',
                             trust: false
                         });
+                        return html + trailingPunct;
                     } catch (err) {
-                        return `<span class="tex-err">${escapeHtml(latex)}</span>`;
+                        return `<span class="tex-err">${escapeHtml(latex)}</span>` + trailingPunct;
                     }
                 }
-                return `<code>${escapeHtml(latex)}</code>`;
+                return `<code>${escapeHtml(latex)}</code>` + trailingPunct;
             };
 
             const formatTextFragment = (txt) => {
@@ -4834,12 +4879,14 @@
                 }
 
                 if (slide.solution) {
+                    let cleanSol = slide.solution.trim();
+                    cleanSol = cleanSol.replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
                     leftHtml += `
                         <div class="pres-solution-box" id="presSolutionBox">
                             <div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem; display:flex; align-items:center; gap:0.4rem;">
                                 <span>💡 HƯỚNG DẪN GIẢI CHI TIẾT</span>
                             </div>
-                            <div>${richPresMath(slide.solution)}</div>
+                            <div>${richPresMath(cleanSol)}</div>
                         </div>
                     `;
                 }
@@ -4912,12 +4959,14 @@
                 }
 
                 if (slide.solution) {
+                    let cleanSol = slide.solution.trim();
+                    cleanSol = cleanSol.replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
                     html += `
                         <div class="pres-solution-box" id="presSolutionBox">
                             <div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem; display:flex; align-items:center; gap:0.4rem;">
                                 <span>💡 HƯỚNG DẪN GIẢI CHI TIẾT</span>
                             </div>
-                            <div>${richPresMath(slide.solution)}</div>
+                            <div>${richPresMath(cleanSol)}</div>
                         </div>
                     `;
                 }

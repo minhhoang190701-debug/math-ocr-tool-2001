@@ -47,6 +47,7 @@ from core.pdf_native_extractor import (
     find_matching_native_image,
     is_black_or_corrupted_image
 )
+from core.mathtype_extractor import extract_mathtype_from_element
 
 # Load .env
 load_dotenv()
@@ -1292,6 +1293,32 @@ def clean_exam_metadata_and_headers(text: str) -> str:
     return text
 
 
+# Bảng ánh xạ font Symbol Word (w:sym) sang Unicode Toán học chuẩn (Học hỏi từ dự án MathRender)
+WORD_SYMBOL_MAP = {
+    0x22: '∀', 0x24: '∃', 0x27: '∋', 0x2a: '∗', 0x2d: '−', 0x40: '≅', 0x41: 'Α', 0x42: 'Β', 0x43: 'Χ', 0x44: 'Δ',
+    0x45: 'Ε', 0x46: 'Φ', 0x47: 'Γ', 0x48: 'Η', 0x49: 'Ι', 0x4b: 'Κ', 0x4c: 'Λ', 0x4d: 'Μ', 0x4e: 'Ν', 0x4f: 'Ο',
+    0x50: 'Π', 0x51: 'Θ', 0x52: 'Ρ', 0x53: 'Σ', 0x54: 'Τ', 0x55: 'Υ', 0x57: 'Ω', 0x58: 'Ξ', 0x59: 'Ψ', 0x5a: 'Ζ',
+    0x5c: '∴', 0x5e: '⊥', 0x61: 'α', 0x62: 'β', 0x63: 'χ', 0x64: 'δ', 0x65: 'ε', 0x66: 'φ', 0x67: 'γ', 0x68: 'η',
+    0x69: 'ι', 0x6a: 'ϕ', 0x6b: 'κ', 0x6c: 'λ', 0x6d: 'μ', 0x6e: 'ν', 0x6f: 'ο', 0x70: 'π', 0x71: 'θ', 0x72: 'ρ',
+    0x73: 'σ', 0x74: 'τ', 0x75: 'υ', 0x77: 'ω', 0x78: 'ξ', 0x79: 'ψ', 0x7a: 'ζ', 0x7e: '∼', 0xa2: '′', 0xa3: '≤',
+    0xa5: '∞', 0xae: '→', 0xb0: '°', 0xb1: '±', 0xb2: '″', 0xb3: '≥', 0xb4: '×', 0xb6: '∂', 0xb8: '÷', 0xb9: '≠',
+    0xba: '≡', 0xbb: '≈', 0xbc: '…', 0xc6: '∅', 0xc7: '∩', 0xc8: '∪', 0xc9: '⊃', 0xcc: '⊂', 0xcd: '⊆', 0xce: '∈',
+    0xcf: '∉', 0xd0: '∠', 0xd1: '∇', 0xd6: '√', 0xd7: '⋅', 0xdb: '⇔', 0xde: '⇒', 0xe5: '∑', 0xf2: '∫'
+}
+
+def decode_word_symbol(font: str, char_hex: str) -> str:
+    try:
+        code = int(char_hex, 16)
+        low = code - 0xf000 if code >= 0xf000 else code
+        if 'symbol' in (font or '').lower() and low in WORD_SYMBOL_MAP:
+            return WORD_SYMBOL_MAP[low]
+        if low >= 0x20:
+            return chr(low)
+    except Exception:
+        pass
+    return ""
+
+
 @app.post("/api/parse-docx-file")
 async def parse_docx_file(file: UploadFile = File(...)):
     """
@@ -1329,10 +1356,36 @@ async def parse_docx_file(file: UploadFile = File(...)):
                     tag = child.tag
                     # Run văn bản thông thường
                     if tag.endswith('r'):
+                        # 0. Kiểm tra MathType OLE Object nhúng bên trong Run
+                        mt_tex = extract_mathtype_from_element(child, doc)
+                        if mt_tex:
+                            mt_tex = clean_math_latex(mt_tex)
+                            if mt_tex:
+                                trailing_punct = ""
+                                m_punct = re.search(r'([.,;:?!])$', mt_tex)
+                                if m_punct and not re.search(r'\\(?:dots|ldots|cdots)\s*$', mt_tex):
+                                    trailing_punct = m_punct.group(1)
+                                    mt_tex = mt_tex[:-1].strip()
+                                if prev_piece_type == 'text' and pieces:
+                                    last_txt = pieces[-1]
+                                    if last_txt and not last_txt.endswith((' ', '\t', '\n')):
+                                        if re.search(r'[a-zA-Zà-ỹÀ-Ỹ0-9\)\}\]]$', last_txt):
+                                            pieces.append(" ")
+                                pieces.append(f"${mt_tex}${trailing_punct}")
+                                prev_piece_type = 'punct' if trailing_punct else 'math'
+                            continue
+
                         r_text = ""
                         for t in child.xpath('.//*[local-name()="t"]'):
                             if t.text:
                                 r_text += t.text
+                        # Giải mã ký tự Symbol Word (w:sym) như ≤, ≥, ∈, ±, ≠...
+                        for sym in child.xpath('.//*[local-name()="sym"]'):
+                            font = sym.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}font') or sym.get('font') or ''
+                            code_str = sym.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}char') or sym.get('char') or ''
+                            ch = decode_word_symbol(font, code_str)
+                            if ch:
+                                r_text += ch
                         if child.xpath('.//*[local-name()="tab"]'):
                             r_text += " "
 
@@ -1348,7 +1401,7 @@ async def parse_docx_file(file: UploadFile = File(...)):
                                 r_text = f"^{{{r_text}}}"
 
                         if r_text:
-                            # 1. Ranh giới Math -> Text: Nếu trước đó là <m:oMath> ($formula$) và Run văn bản kế tiếp bắt đầu bằng chữ cái tiếng Việt/số
+                            # 1. Ranh giới Math -> Text: Nếu trước đó là <m:oMath> hoặc MathType ($formula$) và Run văn bản kế tiếp bắt đầu bằng chữ cái tiếng Việt/số
                             if prev_piece_type == 'math':
                                 if not r_text.startswith((' ', '\t', '\n')) and re.match(r'^[a-zA-Zà-ỹÀ-Ỹ0-9]', r_text):
                                     pieces.append(" ")
@@ -1366,56 +1419,82 @@ async def parse_docx_file(file: UploadFile = File(...)):
                             pieces.append(r_text)
                             prev_piece_type = 'text'
 
-                        # Bóc tách ảnh từ w:r (cả blip drawing và imagedata shape)
+                        # Bóc tách ảnh từ w:r (chỉ lấy drawing thực sự, không lấy ảnh snapshot MathType)
                         for b in child.xpath('.//*[local-name()="blip"]'):
                             rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
                             if rId and rId in doc.part.rels:
                                 img_part = doc.part.rels[rId].target_part
                                 b64 = base64.b64encode(img_part.blob).decode('utf-8')
                                 mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                para_images.append(f"data:{mime};base64,{b64}")
-                                img_count += 1
-                        for b in child.xpath('.//*[local-name()="imagedata"]'):
-                            rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
-                            if rId and rId in doc.part.rels:
-                                img_part = doc.part.rels[rId].target_part
-                                b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                para_images.append(f"data:{mime};base64,{b64}")
-                                img_count += 1
+                                # Kiểm tra kích thước hình ảnh từ thẻ extent (EMU -> cm)
+                                cx, cy = 0.0, 0.0
+                                for ext in child.xpath('.//*[local-name()="extent"]'):
+                                    cx = int(ext.get('cx', 0)) / 914400 * 2.54
+                                    cy = int(ext.get('cy', 0)) / 914400 * 2.54
+                                    if cx > 0:
+                                        break
+                                if cx > 0 and cy > 0 and cx < 2.8 and cy < 1.8:
+                                    pieces.append(f'<img src="data:{mime};base64,{b64}" class="inline-math-img" style="vertical-align:middle; max-height:2.2em; display:inline-block; margin:0 4px;" alt="formula">')
+                                    prev_piece_type = 'text'
+                                else:
+                                    para_images.append(f"data:{mime};base64,{b64}")
+                                    img_count += 1
 
                     # Run công thức toán học chuẩn OMML (Phân số, số mũ, căn, vectơ, ngoặc...)
                     elif tag.endswith('oMath') or tag.endswith('oMathPara'):
                         m_str = omml_element_to_latex(child)
                         m_str = clean_math_latex(m_str)
                         if m_str:
+                            trailing_punct = ""
+                            m_punct = re.search(r'([.,;:?!])$', m_str)
+                            if m_punct and not re.search(r'\\(?:dots|ldots|cdots)\s*$', m_str):
+                                trailing_punct = m_punct.group(1)
+                                m_str = m_str[:-1].strip()
                             # Ranh giới Text -> Math: Nếu trước đó là văn bản thường kết thúc bằng chữ cái/số (hoặc ngoặc), chèn space
                             if prev_piece_type == 'text' and pieces:
                                 last_txt = pieces[-1]
                                 if last_txt and not last_txt.endswith((' ', '\t', '\n')):
                                     if re.search(r'[a-zA-Zà-ỹÀ-Ỹ0-9\)\}\]]$', last_txt):
                                         pieces.append(" ")
-                            pieces.append(f"${m_str}$")
-                            prev_piece_type = 'math'
+                            pieces.append(f"${m_str}${trailing_punct}")
+                            prev_piece_type = 'punct' if trailing_punct else 'math'
 
                     # Khung chứa MathType OLE Object hoặc hình ảnh OLE
                     elif tag.endswith('object'):
-                        for b in child.xpath('.//*[local-name()="blip"]'):
-                            rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                            if rId and rId in doc.part.rels:
-                                img_part = doc.part.rels[rId].target_part
-                                b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                para_images.append(f"data:{mime};base64,{b64}")
-                                img_count += 1
-                        for b in child.xpath('.//*[local-name()="imagedata"]'):
-                            rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
-                            if rId and rId in doc.part.rels:
-                                img_part = doc.part.rels[rId].target_part
-                                b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                para_images.append(f"data:{mime};base64,{b64}")
-                                img_count += 1
+                        mt_tex = extract_mathtype_from_element(child, doc)
+                        if mt_tex:
+                            mt_tex = clean_math_latex(mt_tex)
+                            if mt_tex:
+                                trailing_punct = ""
+                                m_punct = re.search(r'([.,;:?!])$', mt_tex)
+                                if m_punct and not re.search(r'\\(?:dots|ldots|cdots)\s*$', mt_tex):
+                                    trailing_punct = m_punct.group(1)
+                                    mt_tex = mt_tex[:-1].strip()
+                                if prev_piece_type == 'text' and pieces:
+                                    last_txt = pieces[-1]
+                                    if last_txt and not last_txt.endswith((' ', '\t', '\n')):
+                                        if re.search(r'[a-zA-Zà-ỹÀ-Ỹ0-9\)\}\]]$', last_txt):
+                                            pieces.append(" ")
+                                pieces.append(f"${mt_tex}${trailing_punct}")
+                                prev_piece_type = 'punct' if trailing_punct else 'math'
+                        else:
+                            # Nếu không phải MathType (ví dụ OLE Excel, biểu đồ khác) thì mới bóc tách ảnh
+                            for b in child.xpath('.//*[local-name()="blip"]'):
+                                rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                                if rId and rId in doc.part.rels:
+                                    img_part = doc.part.rels[rId].target_part
+                                    b64 = base64.b64encode(img_part.blob).decode('utf-8')
+                                    mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
+                                    para_images.append(f"data:{mime};base64,{b64}")
+                                    img_count += 1
+                            for b in child.xpath('.//*[local-name()="imagedata"]'):
+                                rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                                if rId and rId in doc.part.rels:
+                                    img_part = doc.part.rels[rId].target_part
+                                    b64 = base64.b64encode(img_part.blob).decode('utf-8')
+                                    mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
+                                    para_images.append(f"data:{mime};base64,{b64}")
+                                    img_count += 1
 
                     # Khung vẽ / Hình ảnh (Drawing) trực tiếp
                     elif tag.endswith('drawing'):
@@ -1425,8 +1504,49 @@ async def parse_docx_file(file: UploadFile = File(...)):
                                 img_part = doc.part.rels[rId].target_part
                                 b64 = base64.b64encode(img_part.blob).decode('utf-8')
                                 mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                para_images.append(f"data:{mime};base64,{b64}")
-                                img_count += 1
+                                cx, cy = 0.0, 0.0
+                                for ext in child.xpath('.//*[local-name()="extent"]'):
+                                    cx = int(ext.get('cx', 0)) / 914400 * 2.54
+                                    cy = int(ext.get('cy', 0)) / 914400 * 2.54
+                                    if cx > 0:
+                                        break
+                                if cx > 0 and cy > 0 and cx < 2.8 and cy < 1.8:
+                                    pieces.append(f'<img src="data:{mime};base64,{b64}" class="inline-math-img" style="vertical-align:middle; max-height:2.2em; display:inline-block; margin:0 4px;" alt="formula">')
+                                    prev_piece_type = 'text'
+                                else:
+                                    para_images.append(f"data:{mime};base64,{b64}")
+                                    img_count += 1
+
+                    # Xử lý AlternateContent (Choice/Fallback trong Word)
+                    elif tag.endswith('AlternateContent'):
+                        choice = child.xpath('.//*[local-name()="Choice"]')
+                        target_node = choice[0] if choice else (child.xpath('.//*[local-name()="Fallback"]') or [None])[0]
+                        if target_node is not None:
+                            mt_tex = extract_mathtype_from_element(target_node, doc)
+                            if mt_tex:
+                                mt_tex = clean_math_latex(mt_tex)
+                                if mt_tex:
+                                    trailing_punct = ""
+                                    m_punct = re.search(r'([.,;:?!])$', mt_tex)
+                                    if m_punct and not re.search(r'\\(?:dots|ldots|cdots)\s*$', mt_tex):
+                                        trailing_punct = m_punct.group(1)
+                                        mt_tex = mt_tex[:-1].strip()
+                                    if prev_piece_type == 'text' and pieces:
+                                        last_txt = pieces[-1]
+                                        if last_txt and not last_txt.endswith((' ', '\t', '\n')):
+                                            if re.search(r'[a-zA-Zà-ỹÀ-Ỹ0-9\)\}\]]$', last_txt):
+                                                pieces.append(" ")
+                                    pieces.append(f"${mt_tex}${trailing_punct}")
+                                    prev_piece_type = 'punct' if trailing_punct else 'math'
+                            else:
+                                for b in target_node.xpath('.//*[local-name()="blip"]'):
+                                    rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                                    if rId and rId in doc.part.rels:
+                                        img_part = doc.part.rels[rId].target_part
+                                        b64 = base64.b64encode(img_part.blob).decode('utf-8')
+                                        mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
+                                        para_images.append(f"data:{mime};base64,{b64}")
+                                        img_count += 1
 
                 p_text = ''.join(pieces).strip()
                 if p_text:

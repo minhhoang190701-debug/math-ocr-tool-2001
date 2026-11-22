@@ -64,7 +64,10 @@
         .theme-whiteboard .choice-item { background: #f8fafc; border-color: #e2e8f0; }
         .choice-item:hover { border-color: #ffd84d; background: rgba(255, 216, 77, 0.08); transform: translateY(-2px); }
         .choice-item.correct { border-color: #34d399 !important; background: rgba(16, 185, 129, 0.25) !important; box-shadow: 0 0 16px rgba(16, 185, 129, 0.45) !important; color: #ffffff !important; }
-        .solution-box { margin-top: 1.5rem; background: rgba(255, 255, 255, 0.06); border: 1.5px solid #ffd84d; border-radius: 10px; padding: 1rem 1.4rem; font-size: calc(var(--pres-font-size, 24px) * 0.85); display: none; color: #f3f1e7; animation: presFadeIn 0.25s ease; }
+        .solution-box { margin-top: 1.5rem; background: rgba(255, 255, 255, 0.06); border: 1.5px solid #ffd84d; border-radius: 10px; padding: 1rem 1.4rem; font-size: calc(var(--pres-font-size, 24px) * 0.85); max-height: 72vh; overflow-y: auto; display: none; color: #f3f1e7; animation: presFadeIn 0.25s ease; }
+        .solution-box::-webkit-scrollbar { width: 6px; }
+        .solution-box::-webkit-scrollbar-thumb { background: rgba(255, 216, 77, 0.35); border-radius: 4px; }
+        .solution-box::-webkit-scrollbar-track { background: transparent; }
         .theme-whiteboard .solution-box { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.35); color: #0f172a; }
         .solution-box.show { display: block; }
         #blackout { position: absolute; inset: 0; background: #000; z-index: 99998; display: none; justify-content: center; align-items: center; color: #64748b; font-size: 1.2rem; cursor: pointer; }
@@ -167,13 +170,28 @@
 
             const renderMathFragment = (rawLatex, isDisplay) => {
                 let latex = rawLatex.trim();
+                // 1. Tách dấu câu kết thúc câu (., :, ;, ?, !) ra ngoài công thức toán để hiển thị chuẩn xác
+                let trailingPunct = '';
+                if (/[.,;:?!]$/.test(latex) && !/\\(?:dots|ldots|cdots)$/.test(latex)) {
+                    trailingPunct = latex.slice(-1);
+                    latex = latex.slice(0, -1).trim();
+                }
+
+                // 2. Chuẩn hóa một số ký hiệu toán phổ biến nếu người dùng gõ tự nhiên không có backslash
                 if (!latex.includes('\\le') && latex.includes('<=')) latex = latex.replace(/<=/g, ' \\le ');
                 if (!latex.includes('\\ge') && latex.includes('>=')) latex = latex.replace(/>=/g, ' \\ge ');
                 if (!latex.includes('\\ne') && latex.includes('!=')) latex = latex.replace(/!=/g, ' \\ne ');
                 if (!latex.includes('\\Leftrightarrow') && latex.includes('<=>')) latex = latex.replace(/<=>/g, ' \\Leftrightarrow ');
                 if (!latex.includes('\\Rightarrow') && latex.includes('=>')) latex = latex.replace(/=>/g, ' \\Rightarrow ');
-                if (!latex.includes('\\pm') && latex.includes('+-')) latex = latex.replace(/\\+-/g, ' \\pm ');
+                if (!latex.includes('\\pm') && latex.includes('+-')) latex = latex.replace(/\+-/g, ' \\pm ');
 
+                // 3. Chuẩn hóa prime (T^{\prime} -> T', T^\prime -> T', \prime -> ')
+                latex = latex.replace(/\^\{\\prime\}/g, "'").replace(/\^\\prime/g, "'").replace(/\\prime/g, "'");
+
+                // 4. Tự động sửa phân số bị mất ngoặc mẫu số: \frac{30}x -> \frac{30}{x}
+                latex = latex.replace(/\\(frac|dfrac|tfrac)\{([^{}]+)\}([a-zA-Z0-9])/g, '\\$1{$2}{$3}');
+
+                // 5. Chuẩn hóa chỉ số dưới tiếng Việt
                 latex = latex.replace(/_\{([a-zA-Zà-ỹÀ-Ỹ\s]+)\}/g, (match, inner) => {
                     if (/[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/.test(inner) && !inner.startsWith('\\text')) {
                         return '_{\\text{' + inner.trim() + '}}';
@@ -181,19 +199,38 @@
                     return match;
                 });
 
+                // 6. KHIÊN BẢO VỆ CÂN BẰNG NGOẶC NHỌN CHỐNG LỖI KATEX ĐỎ LÒM:
+                const cleanForBraces = latex.replace(/\\[{}]/g, '');
+                let openB = (cleanForBraces.match(/\{/g) || []).length;
+                let closeB = (cleanForBraces.match(/\}/g) || []).length;
+                if (openB > closeB) {
+                    if (latex.startsWith('{') && openB - closeB === 1) {
+                        latex = latex.slice(1);
+                    } else {
+                        latex = latex + '}'.repeat(openB - closeB);
+                    }
+                } else if (closeB > openB) {
+                    if (latex.endsWith('}') && closeB - openB === 1) {
+                        latex = latex.slice(0, -1);
+                    } else {
+                        latex = '{'.repeat(closeB - openB) + latex;
+                    }
+                }
+
                 if (window.katex && typeof window.katex.renderToString === 'function') {
                     try {
-                        return window.katex.renderToString(latex, {
+                        const html = window.katex.renderToString(latex, {
                             throwOnError: false,
                             displayMode: isDisplay,
                             strict: 'ignore',
                             trust: false
                         });
+                        return html + trailingPunct;
                     } catch (err) {
-                        return '<span class="tex-err">' + escapeHtml(latex) + '</span>';
+                        return '<span class="tex-err">' + escapeHtml(latex) + '</span>' + trailingPunct;
                     }
                 }
-                return '<code>' + escapeHtml(latex) + '</code>';
+                return '<code>' + escapeHtml(latex) + '</code>' + trailingPunct;
             };
 
             const formatTextFragment = (txt) => {
@@ -413,7 +450,8 @@
                 }
 
                 if (s.solution) {
-                    leftHtml += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(s.solution) + '</div>';
+                    var cleanSol = s.solution.trim().replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
+                    leftHtml += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(cleanSol) + '</div>';
                 }
 
                 let rightHtml = '<div class="image-wrapper"><img src="' + src + '" title="Click để phóng to cực đại" onclick="this.classList.toggle(\'zoomed-pop\')"></div>';
@@ -454,7 +492,8 @@
                 }
                 
                 if (s.solution) {
-                    html += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(s.solution) + '</div>';
+                    var cleanSol = s.solution.trim().replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
+                    html += '<div class="solution-box" id="solBox"><div style="font-weight:700; color:#ffd84d; margin-bottom:0.4rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT:</div>' + richPresMath(cleanSol) + '</div>';
                 }
             }
 

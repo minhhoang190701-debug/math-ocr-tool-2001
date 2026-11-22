@@ -310,16 +310,17 @@ def clean_math_latex(latex_str: str) -> str:
     # 2. Khắc phục lỗi vectơ bị vỡ mất ngoặc nhọn: \vecDB, \vecBD, \vecu, \vecB'D' -> bọc lại \vec{...}
     s = re.sub(r"\\vec(?![a-zA-Z]*\{)([A-Za-z_\']+)", r"\\vec{\1}", s)
 
-    # 3. Gỡ bỏ các cặp ngoặc nhọn bọc lẻ biến số hoặc đỉnh không thuộc lệnh LaTeX (ví dụ: {B'}{D'} -> B'D', {A}' -> A', {B} -> B)
+    # 3. Gỡ bỏ các cặp ngoặc nhọn bọc lẻ biến số hoặc đỉnh không thuộc lệnh LaTeX (ví dụ: {A}' -> A', {B} -> B)
+    # BẢO VỆ TUYỆT ĐỐI MẪU SỐ, TỬ SỐ VÀ THAM SỐ CỘT ARRAY: cấm gỡ ngoặc khi đứng sau \, ^, _, }, hoặc \begin{array}
     def _unwrap_single_braces(m):
-        cmd = m.group(1)
+        prefix = m.group(1) or ""
         content = m.group(2)
         prime = m.group(3) or ""
-        if cmd:
-            return f"{cmd}{{{content}}}{prime}"
-        return f"{content}{prime}"
+        if re.search(r"\\begin\{(?:array|tabular)\}\s*$", prefix):
+            return f"{prefix}{{{content}}}{prime}"
+        return f"{prefix}{content}{prime}"
 
-    s = re.sub(r"(\\[a-zA-Z]+)?\{([A-Za-z0-9_']+)\}([']*)", _unwrap_single_braces, s)
+    s = re.sub(r"((?:\\begin\{(?:array|tabular)\}\s*)?)(?<![\\^_}\w])\{([A-Za-z0-9_']+)\}([']*)", _unwrap_single_braces, s)
 
     # 4. Dọn dẹp khoảng trắng / xuống dòng bên trong dấu \vec{...}
     s = re.sub(r"\\vec\{([^}]+)\}", lambda m: f"\\vec{{{re.sub(r'\s+', '', m.group(1))}}}", s)
@@ -351,6 +352,25 @@ def clean_math_latex(latex_str: str) -> str:
 
     # Chuẩn hóa khoảng trắng quanh toán tử (BẮT BUỘC dùng \b cho \le, \ge, \cdot để KHÔNG làm rách \left, \right)
     s = re.sub(r"\s*([=+\-]|<|>|\\le\b|\\ge\b|\\cdot\b)\s*", r" \1 ", s)
+
+    # Chuẩn hóa prime
+    s = s.replace('^{\\prime}', "'").replace('^\\prime', "'").replace('\\prime', "'")
+
+    # Cân bằng ngoặc nhọn unescaped
+    clean = re.sub(r'\\[{}]', '', s)
+    open_c = clean.count('{')
+    close_c = clean.count('}')
+    if open_c > close_c:
+        if s.startswith('{') and open_c - close_c == 1:
+            s = s[1:].strip()
+        else:
+            s = s + ('}' * (open_c - close_c))
+    elif close_c > open_c:
+        if s.endswith('}') and close_c - open_c == 1:
+            s = s[:-1].strip()
+        else:
+            s = ('{' * (close_c - open_c)) + s
+
     # Thu gọn khoảng trắng thừa
     s = re.sub(r"[ \t]+", " ", s).strip()
     return s
