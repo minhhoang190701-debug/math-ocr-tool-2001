@@ -106,9 +106,28 @@ def clean_mathtype_latex(tex: str) -> str:
     tex = tex.replace('∉', ' \\notin ')
     tex = tex.replace('∞', ' \\infty ')
     tex = tex.replace('°', '^\\circ ')
+    # Chuẩn hóa vector MathType \overset\rightarrow { a } -> \vec{a}
+    tex = re.sub(r'\\overset\s*\{?\\rightarrow\}?\s*\{\s*([^{}]+?)\s*\}', lambda m: f"\\vec{{{m.group(1).strip()}}}", tex)
     tex = re.sub(r'\{\s*~([a-zA-Z]+)\s*\}', r'\\text{ \1}', tex)
     tex = re.sub(r'\{\s*\\rm\{\s*([a-zA-Z]+)\s*\}\s*\}', r'\\mathrm{\1}', tex)
     tex = re.sub(r'\\rm\{\s*([a-zA-Z]+)\s*\}', r'\\mathrm{\1}', tex)
+    # MathType min/max/lim và dọn dẹp thẻ \rm dư thừa
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?min\s*\}?\s*\\limits', r'\\min\\limits', tex)
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?max\s*\}?\s*\\limits', r'\\max\\limits', tex)
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?lim\s*\}?\s*\\limits', r'\\lim\\limits', tex)
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?min\s*\}?', r'\\min', tex)
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?max\s*\}?', r'\\max', tex)
+    tex = re.sub(r'\\mathop\s*\{?\s*(?:\\rm\s*)?lim\s*\}?', r'\\lim', tex)
+
+    # Chuẩn hóa hàm lượng giác, logarit bị MathType bọc trong \rm
+    funcs = ['sin', 'cos', 'tan', 'cot', 'ln', 'log', 'exp', 'arcsin', 'arccos', 'arctan']
+    fn_pat = r'\{\s*\\rm\s+(' + '|'.join(funcs) + r')\s*\}|\\rm\s+(' + '|'.join(funcs) + r')(?![a-zA-Z])'
+    tex = re.sub(fn_pat, lambda m: f"\\{m.group(1) or m.group(2)} ", tex)
+    tex = re.sub(r'\{\s*\\rm\s+d\s*\}\s*([a-zA-Z])', r'\\mathrm{d}\1', tex)
+
+    tex = re.sub(r'\{\s*\\rm\{\s*\}\s*\}', '', tex)
+    tex = re.sub(r'\{\s*\\rm\{\s*([0-9a-zA-Z]+)\s*\}\s*\}', r'\1', tex)
+    tex = re.sub(r'\{\s*\\rm\{\s*([.,;:?!])\s*\}\s*\}', r'\1', tex)
 
     # Học từ MathRender: Chuyển hệ phương trình \left\{\begin{array}{l} sang \begin{cases} chuẩn KaTeX
     tex = re.sub(r'\\left\\\{\s*\\begin\{array\}\s*\{?\s*l\s*\}?', r'\\begin{cases}', tex)
@@ -124,19 +143,51 @@ def clean_mathtype_latex(tex: str) -> str:
     return tex
 
 
+def extract_mtef_from_wmf(wmf_bytes: bytes) -> str:
+    """Trích xuất và giải mã luồng MTEF nhúng trong ảnh WMF của MathType khi không có chuỗi TeX thô."""
+    if not wmf_bytes or not MTEF:
+        return ""
+    idx = wmf_bytes.find(b'DSMT')
+    if idx == -1:
+        return ""
+    mtef_start = idx - 5
+    if mtef_start < 0:
+        return ""
+    mtef_body = wmf_bytes[mtef_start:]
+    try:
+        from io import BytesIO
+        eqn = MTEF()
+        eqn.reader = BytesIO(mtef_body)
+        eqn.readRecord()
+        eqn.makeAST()
+        tex = eqn.Translate().strip()
+        if tex:
+            if tex.startswith('$') and tex.endswith('$'):
+                tex = tex[1:-1].strip()
+            return clean_mathtype_latex(tex)
+    except Exception:
+        pass
+    return ""
+
+
 def extract_mathtype_formula(ole_bytes: Optional[bytes], wmf_bytes: Optional[bytes] = None) -> str:
     """
     Giải mã đa tầng:
     Tầng 1: Đọc chuỗi TeX nguyên bản từ WMF (nét 100%).
-    Tầng 2: Giải mã byte stream MTEF từ oleObject.bin qua MTEF Parser.
+    Tầng 2: Giải mã byte stream MTEF trực tiếp từ WMF nếu có header DSMT.
+    Tầng 3: Giải mã byte stream MTEF từ oleObject.bin qua MTEF Parser.
     """
     # 1. Ưu tiên lấy từ chuỗi TeX trong WMF nếu có
     if wmf_bytes:
         tex = extract_tex_from_wmf(wmf_bytes)
         if tex:
             return clean_mathtype_latex(tex)
+        # 2. Thử giải mã MTEF nhúng trực tiếp trong WMF
+        tex = extract_mtef_from_wmf(wmf_bytes)
+        if tex:
+            return clean_mathtype_latex(tex)
 
-    # 2. Giải mã bằng MTEF parser
+    # 3. Giải mã bằng MTEF parser từ ole_bytes
     if ole_bytes and MTEF:
         try:
             mtef_obj, err = MTEF.OpenBytes(ole_bytes)

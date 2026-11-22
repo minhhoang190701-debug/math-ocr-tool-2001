@@ -851,6 +851,40 @@
             text-align: justify;
         }
 
+        .pres-sub-item {
+            display: flex;
+            align-items: baseline;
+            gap: 0.65rem;
+            margin: 0.45rem 0;
+            padding: 0.35rem 0.75rem;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border-left: 3.5px solid rgba(56, 189, 248, 0.55);
+            transition: all 0.2s ease;
+        }
+
+        .pres-sub-item:hover {
+            background: rgba(255, 255, 255, 0.075);
+            border-left-color: #38bdf8;
+            transform: translateX(3px);
+        }
+
+        .pres-sub-item-badge {
+            font-weight: 800;
+            font-size: 1.05em;
+            color: #38bdf8;
+            flex-shrink: 0;
+            min-width: 1.8rem;
+            display: inline-block;
+            letter-spacing: 0.5px;
+        }
+
+        .pres-sub-item-content {
+            flex: 1;
+            line-height: 1.55;
+            text-align: left;
+        }
+
         .pres-image-wrapper {
             text-align: center;
             margin: 0.8rem 0;
@@ -1823,11 +1857,25 @@
                     💡 Đáp án
                 </button>
 
+                <!-- Sửa câu này (Inline Quick Slide Editor) -->
+                <button class="pres-tool-btn" onclick="openInlineQuickEditor()" id="btnInlineEditSlide"
+                    title="Chỉnh sửa trực tiếp câu này: công thức LaTeX, phương án, lời giải (Phím E hoặc Click đúp vào câu hỏi)"
+                    style="border-color:rgba(251,191,36,0.6); color:#fde047; font-weight:700;">
+                    <span style="font-size:1rem;">✏️</span> Sửa câu
+                </button>
+
                 <!-- AI Solver Button -->
                 <button class="pres-tool-btn" onclick="askAiSolveCurrentSlide()" id="btnAiSolveSlide"
                     title="Dùng Gemini AI giải chi tiết & tự động tìm đáp án cho câu hỏi này"
                     style="border-color:rgba(167,139,250,0.5); color:#c4b5fd;">
                     <span style="font-size:1rem;">🤖</span> Gemini Giải đề <span id="presApiKeyPill" style="font-size:0.75rem; background:rgba(167,139,250,0.25); padding:1px 6px; border-radius:999px; margin-left:3px;">🔑 AI</span>
+                </button>
+
+                <!-- AI Re-read Button -->
+                <button class="pres-tool-btn" onclick="aiReReadCurrentSlide()" id="btnAiReReadSlide"
+                    title="Dùng AI đọc lại câu này (sửa lỗi công thức, ảnh hóa hoặc dính chữ)"
+                    style="border-color:rgba(52,211,153,0.5); color:#6ee7b7;">
+                    <span style="font-size:1rem;">⚡</span> Đọc lại bằng AI
                 </button>
 
                 <!-- Drawing Pen -->
@@ -1964,6 +2012,104 @@
                     <button class="btn btn-purple" onclick="startQuickPresentation()"
                         style="padding:0.5rem 1.4rem; font-weight:700;">
                         🚀 Bắt đầu trình chiếu ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════ INLINE QUICK SLIDE EDITOR MODAL (2 CỘT) ═══════════ -->
+    <div class="modal-overlay" id="inlineSlideEditorModal" style="z-index: 1000001;">
+        <div class="modal" style="max-width: 1380px; width: 96vw; height: 92vh; display: flex; flex-direction: column; padding: 1.25rem; background: #0f172a; border: 1px solid #334155; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.85); color: #f8fafc;">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.8rem; border-bottom: 1px solid #334155;">
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span style="font-size: 1.3rem;">✏️</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.15rem; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
+                            Chỉnh sửa nhanh câu hỏi
+                            <span id="editorSlideBadge" style="background: rgba(251,191,36,0.2); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); font-size: 0.85rem; padding: 2px 10px; border-radius: 999px;">Câu 1</span>
+                        </h3>
+                        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                            Bảo toàn công thức LaTeX ($..$, $$..$$). Cột phải xem trước KaTeX trực tiếp thời gian thực.
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <button class="btn btn-outline" type="button" onclick="closeInlineQuickEditor()" style="padding: 0.3rem 0.7rem; font-size: 1.1rem; border-color: #475569; color: #cbd5e1;">✕</button>
+                </div>
+            </div>
+
+            <!-- Body 2 Cột -->
+            <div style="display: flex; gap: 1rem; flex: 1; min-height: 0; margin-top: 0.8rem;">
+                <!-- CỘT TRÁI: Soạn thảo -->
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 0.7rem; overflow-y: auto; padding-right: 0.5rem;">
+                    <!-- Hàng: Tiêu đề & Phần thi -->
+                    <div style="display: flex; gap: 0.6rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Tiêu đề nhãn câu:</label>
+                            <input type="text" id="editorTitleInput" oninput="updateInlineEditorPreview()"
+                                style="width: 100%; background: #1e293b; border: 1px solid #475569; color: #f8fafc; padding: 0.45rem 0.6rem; border-radius: 6px; font-weight: 700;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 4px;">Phần thi (Tùy chọn):</label>
+                            <input type="text" id="editorSectionInput" oninput="updateInlineEditorPreview()"
+                                style="width: 100%; background: #1e293b; border: 1px solid #475569; color: #f8fafc; padding: 0.45rem 0.6rem; border-radius: 6px;">
+                        </div>
+                    </div>
+
+                    <!-- Thân đề bài -->
+                    <div style="display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">Nội dung đề bài (Hỗ trợ LaTeX $...$, ảnh ___PRES_IMAGE___):</label>
+                            <span style="font-size: 0.72rem; color: #38bdf8;">Ví dụ: $P = \frac{1}{\sqrt{5}} + 2$</span>
+                        </div>
+                        <textarea id="editorQuestionInput" rows="5" oninput="updateInlineEditorPreview()"
+                            style="width: 100%; background: #1e293b; border: 1px solid #475569; color: #f8fafc; padding: 0.6rem; border-radius: 6px; font-family: 'Consolas', 'Fira Code', monospace; font-size: 0.95rem; line-height: 1.45; resize: vertical;"></textarea>
+                    </div>
+
+                    <!-- 4 Phương án A, B, C, D -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">Các phương án trắc nghiệm:</label>
+                            <button type="button" class="btn btn-outline" onclick="addEditorChoice()" style="padding: 2px 8px; font-size: 0.75rem; border-color: #38bdf8; color: #38bdf8;">+ Thêm phương án</button>
+                        </div>
+                        <div id="editorChoicesList" style="display: flex; flex-direction: column; gap: 0.45rem;">
+                            <!-- Sẽ được điền động bởi renderEditorChoicesList -->
+                        </div>
+                    </div>
+
+                    <!-- Lời giải & Đáp án -->
+                    <div style="display: flex; flex-direction: column; margin-top: 0.3rem;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: #ffd84d; margin-bottom: 4px;">💡 Lời giải & Hướng dẫn chi tiết (Tùy chọn):</label>
+                        <textarea id="editorSolutionInput" rows="4" oninput="updateInlineEditorPreview()"
+                            style="width: 100%; background: #1e293b; border: 1px solid #475569; color: #f8fafc; padding: 0.6rem; border-radius: 6px; font-family: 'Consolas', 'Fira Code', monospace; font-size: 0.92rem; line-height: 1.45; resize: vertical;"></textarea>
+                    </div>
+                </div>
+
+                <!-- CỘT PHẢI: Live Preview KaTeX -->
+                <div style="flex: 1; display: flex; flex-direction: column; background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden;">
+                    <div style="background: #0f172a; padding: 0.5rem 0.8rem; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 700; font-size: 0.85rem; color: #38bdf8; display: flex; align-items: center; gap: 4px;">
+                            👁️ Live Preview KaTeX (Thời gian thực)
+                        </span>
+                        <span style="font-size: 0.75rem; color: #94a3b8;">Cập nhật khi gõ</span>
+                    </div>
+                    <div id="editorLivePreviewContent" style="flex: 1; overflow-y: auto; padding: 1.2rem; font-family: 'Be Vietnam Pro', sans-serif;">
+                        <!-- Live preview rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.8rem; border-top: 1px solid #334155; margin-top: 0.6rem;">
+                <span style="font-size: 0.8rem; color: #94a3b8;">
+                    💡 Mẹo: Nhấn <kbd style="background:#1e293b; border:1px solid #475569; padding:2px 6px; border-radius:4px; font-size:0.75rem;">Ctrl + Enter</kbd> để Lưu nhanh • <kbd style="background:#1e293b; border:1px solid #475569; padding:2px 6px; border-radius:4px; font-size:0.75rem;">Esc</kbd> để Hủy
+                </span>
+                <div style="display: flex; gap: 0.6rem;">
+                    <button class="btn btn-outline" type="button" onclick="closeInlineQuickEditor()" style="padding: 0.45rem 1.2rem;">Hủy bỏ</button>
+                    <button class="btn btn-success" type="button" onclick="saveInlineQuickEditor()" style="padding: 0.45rem 1.5rem; font-weight: 700; background: #10b981; border-color: #059669;">
+                        💾 Lưu & Cập nhật Slide
                     </button>
                 </div>
             </div>
@@ -3432,16 +3578,18 @@
             return t;
         }
 
-        // Tự động bọc các biểu thức toán học đứng trần trụi ngoài dấu $ trong đoạn văn
+        // 🛡️ KHÓA KÉT SẮT CÔNG THỨC TOÁN (MATH IMMUTABILITY - CHUẨN AZOTA):
+        // Tự động bọc các biểu thức toán học đứng trần trụi ngoài dấu $ (CHỈ chạy khi không có dấu $ nào trong văn bản)
         function autoWrapMathInText(text) {
-            if (!text) return '';
-            // 1. Phân số \frac{...}{...}
-            text = text.replace(/(?<!\$)\\(?:frac|dfrac|tfrac)\{([^{}]+)\}\{([^{}]+)\}(?!\$)/g, '$\\frac{$1}{$2}$');
-            // 2. Căn thức \sqrt{...}
-            text = text.replace(/(?<!\$)\\(?:sqrt)(?:\[[^\]]*\])?\{([^{}]+)\}(?!\$)/g, '$$&$');
-            // 3. Vectơ \vec{...} hoặc \overrightarrow{...}
-            text = text.replace(/(?<!\$)\\(?:vec|overrightarrow)\{([^{}]+)\}(?!\$)/g, '$$&$');
-            // 4. Biểu thức biến có chỉ số dưới/trên và đẳng thức: x_{CĐ} = 4, x_{CT} = 0
+            if (!text || typeof text !== 'string') return text || '';
+            // Nếu chuỗi đã chứa $...$, $$...$$, \(...\) hoặc \[...\], TUYỆT ĐỐI không can thiệp, bảo toàn 100%!
+            if (text.includes('$') || text.includes('\\(') || text.includes('\\[') || text.includes('$$')) {
+                return text;
+            }
+            // Chỉ bọc khi hoàn toàn không có dấu $ nào trong chuỗi (triệt tiêu vĩnh viễn lỗi vỡ phân số lồng căn \frac{1}{\sqrt{5}})
+            text = text.replace(/\\(?:frac|dfrac|tfrac)\{([^{}]+)\}\{([^{}]+)\}/g, '$\\frac{$1}{$2}$');
+            text = text.replace(/\\(?:sqrt)(?:\[[^\]]*\])?\{([^{}]+)\}/g, (m) => '$' + m + '$');
+            text = text.replace(/\\(?:vec|overrightarrow)\{([^{}]+)\}/g, (m) => '$' + m + '$');
             text = text.replace(/(?<![\$\w])([a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+(?:\s*[,;]\s*[a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+)*)(?![\$\w])/g, '$$1$');
             return text;
         }
@@ -3450,7 +3598,8 @@
         // Chữ thường được escape an toàn; công thức toán ($..$, $$..$$) giữ nguyên 100% và gọi KaTeX trực tiếp
         function richPresMath(text) {
             if (!text) return '';
-            const norm = autoWrapMathInText(normalizeInputText(text));
+            // 🛡️ MATH IMMUTABILITY: Mọi công thức trong $..$ và $$..$$ là BẤT KHẢ XÂM PHẠM, KaTeX render trực tiếp 100%
+            const norm = normalizeInputText(text);
             const mathRegex = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g;
             let out = '';
             let lastIndex = 0;
@@ -3993,7 +4142,21 @@
                 } else {
                     flushTable();
                     if (trimmed) {
-                        outputParts.push(richPresMath(trimmed));
+                        // Nhận diện nếu dòng là một ý con (Đúng/Sai a-h hoặc Tự luận 1-9)
+                        const subMatch = trimmed.match(/^([a-l][\)\/\.]|\([a-l]\)|[1-9]\d?[\)\/\.]|\([1-9]\d?\))\s+(.*)$/i);
+                        if (subMatch) {
+                            const lbl = subMatch[1].trim();
+                            const subBody = subMatch[2].trim();
+                            const subHtml = `
+                                <div class="pres-sub-item">
+                                    <span class="pres-sub-item-badge">${escapeHtml(lbl)}</span>
+                                    <div class="pres-sub-item-content">${richPresMath(subBody)}</div>
+                                </div>
+                            `;
+                            outputParts.push(subHtml);
+                        } else {
+                            outputParts.push(richPresMath(trimmed));
+                        }
                     }
                 }
             });
@@ -4002,7 +4165,7 @@
             let finalHtml = '';
             outputParts.forEach((part) => {
                 if (!part) return;
-                if (part.includes('class="pres-table-wrapper"')) {
+                if (part.includes('class="pres-table-wrapper"') || part.includes('class="pres-sub-item"')) {
                     finalHtml += part;
                 } else {
                     finalHtml += (finalHtml && !finalHtml.endsWith('</div>') ? '<br>' : '') + part;
@@ -4012,9 +4175,69 @@
             return finalHtml;
         }
 
+        function splitSlideSubItems(text) {
+            if (!text) return '';
+            const { text: maskedMedia, tokens: mediaTokens } = maskSlideMediaTags(text);
+            let s = maskedMedia;
+
+            // 1. Mask Math Blocks ($$...$$ and $...$)
+            const mathTokens = [];
+            s = s.replace(/(\$\$[\s\S]*?\$\$|\$[^\$]+?\$)/g, (m) => {
+                const tok = `___PRES_MATH_TOK_${mathTokens.length}___`;
+                mathTokens.push({ tok, content: m });
+                return tok;
+            });
+
+            // 2. Mask Tiêu đề PHẦN (PHẦN I, PHẦN II...) để bảo vệ câu chỉ dẫn
+            const secTokens = [];
+            s = s.replace(/(^|\n)\s*((?:PHẦN|Phần)\s+[I|V|X\d]+[^\n]*)/g, (m, p1, p2) => {
+                const tok = `___PRES_SEC_TOK_${secTokens.length}___`;
+                secTokens.push({ tok, content: p2 });
+                return `${p1}${tok}`;
+            });
+
+            // 3. TÁCH DÒNG CÁC Ý CHỮ CÁI: a), b), c), d), e), f), g), h)...
+            // 3.1 Tách ý a) đầu tiên khi sau dấu câu kết thúc (., ?, !, :, ;) hoặc điểm số hoặc media
+            s = s.replace(/([\.\?!:;\)]|\bđiểm\)|___FIG_TOKEN_\d+___|___PRES_IMAGE___)\s+([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\_])/g, '$1\n\n$2 ');
+
+            // 3.2 Tách ý a) đứng độc lập nếu theo sau có b)
+            s = s.replace(/(?:^|(?<=\s))\s*([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=(?:(?!Câu|Bài|PHẦN|Phần)[\s\S])*?[b-l][\)\/\.])/g, '\n\n$1 ');
+
+            // 3.3 Tách các ý tiếp theo b) đến l)
+            s = s.replace(/(?:^|(?<=\s))\s*([b-l][\)\/]|\([b-l]\)|\b[b-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\_])/g, (match, lbl, offset, fullStr) => {
+                const prefix = fullStr.substring(Math.max(0, offset - 35), offset).toLowerCase();
+                if (/[,;:\-\+]\s*$/.test(prefix)) return match;
+                if (/\b(?:ý|các\s+ý|mỗi\s+ý|trong\s+ý|và|hoặc|đồ\s+thị|đường\s+cong|đường\s+tròn|mặt\s+phẳng|điểm|hàm\s+số)\s*$/.test(prefix)) return match;
+                if (prefix.includes('(') && !prefix.substring(prefix.lastIndexOf('(')).includes(')')) return match;
+                return `\n\n${lbl} `;
+            });
+
+            // 4. TÁCH DÒNG CÁC Ý SỐ: 1), 2), 3)...
+            s = s.replace(/([\.\?!:;\)]|\bđiểm\)|___FIG_TOKEN_\d+___|___PRES_IMAGE___)\s+([1-9]\d?[\)\/]|\([1-9]\d?\)|[1-9]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ\$\_])/g, '$1\n\n$2 ');
+            s = s.replace(/(?:^|(?<=\s))\s*([2-9]\d?[\)\/]|\([2-9]\d?\))\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\_])/g, (match, lbl, offset, fullStr) => {
+                const prefix = fullStr.substring(Math.max(0, offset - 35), offset).toLowerCase();
+                if (/[,;:\-\+]\s*$/.test(prefix)) return match;
+                if (prefix.includes('(') && !prefix.substring(prefix.lastIndexOf('(')).includes(')')) return match;
+                if (/\b(?:từ|đến|ở|trong|câu|bài|phần|ngày|tháng|năm|lớp|trang|bước|mã\s+đề|đề|thứ|khoảng|đoạn)\s*$/.test(prefix)) return match;
+                return `\n\n${lbl} `;
+            });
+
+            // Khôi phục Section Headers an toàn không bị lỗi pattern $
+            secTokens.forEach(t => { s = s.split(t.tok).join(t.content); });
+            // Khôi phục Math Blocks an toàn 100% không bị nuốt $ trong KaTeX
+            mathTokens.forEach(t => { s = s.split(t.tok).join(t.content); });
+            // Khôi phục Media Tags
+            s = unmaskSlideMediaTags(s, mediaTokens);
+
+            return s;
+        }
+
         function parseTextToSlides(rawText) {
             if (!rawText || !rawText.trim()) return [];
             rawText = normalizeInputText(rawText);
+
+            // Tự động nhận diện và tách dòng cho các ý Đúng/Sai a-d, tự luận a-h và 1,2,3...
+            rawText = splitSlideSubItems(rawText);
 
             // 1. Chuẩn hóa an toàn các vectơ và mũi tên
             rawText = sanitizeSlideVectors(rawText);
@@ -4032,9 +4255,13 @@
             const solInlinePrefix = "(?:(?:Lời\\s*giải|Hướng\\s*dẫn\\s*giải|Giải\\s*chi\\s*tiết|HDG|Solution|LỜI\\s*GIẢI|HƯỚNG\\s*DẪN\\s*GIẢI)\\s*[:\\.\\-]?|(?:Chọn|Đáp\\s*án)\\s*[:\\.]?\\s*[A-D]\\b)";
             rawText = rawText.replace(new RegExp(`([A-D]\\.[^\\n]+?)\\s+(${solInlinePrefix})`, 'gi'), '$1\n\n$2');
 
-            // Tách dòng các phương án trắc nghiệm A., B., C., D. (bảo vệ tuyệt đối Chọn D., Đáp án D.)
+            // Tách dòng các phương án trắc nghiệm A., B., C., D. (bảo vệ tuyệt đối Chọn D., Đáp án D. và điểm hình học)
             rawText = rawText.replace(/(\S+)\s+([A-D]\.|\([A-D]\))\s+/g, (match, prefix, lbl) => {
                 if (/^(?:chọn|đáp\s*án|phương\s*án)$/i.test(prefix)) {
+                    return `${prefix} ${lbl} `;
+                }
+                // 🛡️ Tuyệt đối không chém đôi câu văn hình học (như "...hai điểm A, B." hoặc "đỉnh A, B.")
+                if (/[,\-]$/.test(prefix) || /^(?:điểm|đỉnh|đoạn|tam\s*giác|tứ\s*diện|mặt\s*phẳng|đường\s*thẳng|tại|với|và|hoặc)$/i.test(prefix)) {
                     return `${prefix} ${lbl} `;
                 }
                 return `${prefix}\n${lbl} `;
@@ -4859,7 +5086,7 @@
                         <span class="pres-q-badge">${escapeHtml(slide.title)}</span>
                         <span style="font-size:0.95rem; opacity:0.75; font-style:italic;">Câu ${currentPresIndex + 1} / ${presSlides.length}</span>
                     </div>
-                    <div class="pres-q-body">
+                    <div class="pres-q-body" ondblclick="openInlineQuickEditor()" title="Click đúp để sửa nhanh câu này (Phím E)" style="cursor:pointer;">
                         ${qBodyHtml}
                     </div>
                 `;
@@ -4939,7 +5166,7 @@
                         <span class="pres-q-badge">${escapeHtml(slide.title)}</span>
                         <span style="font-size:0.95rem; opacity:0.75; font-style:italic;">Câu ${currentPresIndex + 1} / ${presSlides.length}</span>
                     </div>
-                    <div class="pres-q-body">
+                    <div class="pres-q-body" ondblclick="openInlineQuickEditor()" title="Click đúp để sửa nhanh câu này (Phím E)" style="cursor:pointer;">
                         ${qBodyHtml}
                     </div>
                 `;
@@ -5237,6 +5464,20 @@
 
         // ═══════════ Keyboard Shortcuts ═══════════
         document.addEventListener('keydown', (e) => {
+            const editorM = document.getElementById('inlineSlideEditorModal');
+            if (editorM && editorM.classList.contains('active')) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeInlineQuickEditor();
+                    return;
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    saveInlineQuickEditor();
+                    return;
+                }
+            }
+
             const overlay = document.getElementById('presentationOverlay');
             if (!overlay || overlay.style.display === 'none') return;
 
@@ -5255,7 +5496,16 @@
                     e.preventDefault();
                     prevPresSlide();
                     break;
+                case 'e':
+                case 'E':
+                    e.preventDefault();
+                    openInlineQuickEditor();
+                    break;
                 case 'Escape':
+                    if (editorM && editorM.classList.contains('active')) {
+                        closeInlineQuickEditor();
+                        break;
+                    }
                     const cropM = document.getElementById('cropModal');
                     if (cropM && cropM.classList.contains('active')) {
                         closeCropModal();
@@ -5450,6 +5700,100 @@
             }
         }
 
+        async function aiReReadCurrentSlide() {
+            if (!presSlides || presSlides.length === 0 || currentPresIndex >= presSlides.length) {
+                showToast("⚠️ Không có câu hỏi nào trên màn hình để đọc lại!");
+                return;
+            }
+
+            const slide = presSlides[currentPresIndex];
+            const btn = document.getElementById('btnAiReReadSlide');
+            if (!btn) return;
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span style="display:inline-block; animation:presFadeIn 0.5s infinite alternate; margin-right:4px;">⏳</span> Đang đọc...`;
+
+            try {
+                const effectiveKeys = getEffectiveApiKeys();
+
+                // Thu thập hình ảnh của slide nếu có
+                const imagesToSend = [];
+                if (slide.imageData && slide.imageData.dataUrl) {
+                    imagesToSend.push(slide.imageData.dataUrl);
+                } else if (Array.isArray(slide.images) && slide.images.length > 0) {
+                    imagesToSend.push(...slide.images);
+                }
+
+                const payload = {
+                    question_text: (slide.questionText || '').replace(/___PRES_IMAGE___/g, '').trim(),
+                    choices: slide.choices || [],
+                    images: imagesToSend,
+                    api_keys: JSON.stringify(effectiveKeys),
+                    model_name: (typeof selectedModel !== 'undefined' && selectedModel) ? selectedModel : 'auto'
+                };
+
+                const resp = await fetch('/api/ai-ocr-question', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Không thể gọi Gemini AI đọc lại câu hỏi');
+                }
+
+                const data = await resp.json();
+                const hadPresImage = (slide.questionText || '').includes('___PRES_IMAGE___');
+
+                if (data.question) {
+                    let newQ = data.question.trim();
+                    // Nếu slide đã có tiêu đề "Câu x:", loại bỏ tiền tố bị lặp lại ở đầu thân câu
+                    if (slide.title) {
+                        const escapedTitle = slide.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        newQ = newQ.replace(new RegExp('^' + escapedTitle + '[:\\.]?\\s*', 'i'), '');
+                    }
+                    newQ = newQ.replace(/^(?:Câu|Bài)\s*\d+[\.:]?\s*/i, '');
+
+                    // Giữ lại token hình ảnh nếu ban đầu câu hỏi có chứa
+                    if (hadPresImage && !newQ.includes('___PRES_IMAGE___')) {
+                        newQ = newQ.trim() + ' ___PRES_IMAGE___';
+                    }
+                    slide.questionText = newQ;
+                }
+
+                if (data.choices && Array.isArray(data.choices) && data.choices.length > 0) {
+                    // Giữ lại trạng thái đáp án đúng (isCorrect) từ các phương án trước đó
+                    const oldCorrectLabels = new Set(
+                        (slide.choices || []).filter(c => c.isCorrect).map(c => (c.label || '').replace(/[\.\:\s]/g, '').toUpperCase())
+                    );
+
+                    slide.choices = data.choices.map(c => {
+                        const rawLabel = (c.label || '').trim();
+                        const cleanLabel = rawLabel.replace(/[\.\:\s]/g, '').toUpperCase();
+                        let choiceText = (c.text || '').trim();
+                        // Nếu AI lặp lại nhãn phương án ở đầu nội dung (ví dụ "A. (-4; -7; 5)"), gỡ bỏ tiền tố
+                        choiceText = choiceText.replace(new RegExp('^' + cleanLabel + '[\\.:\\)]\\s*', 'i'), '');
+
+                        return {
+                            label: cleanLabel || rawLabel,
+                            text: choiceText,
+                            isCorrect: oldCorrectLabels.has(cleanLabel) || !!c.isCorrect
+                        };
+                    });
+                }
+
+                // Render lại slide với công thức KaTeX vừa được AI chuẩn hóa
+                renderCurrentPresSlide();
+                showToast(`⚡ Đã dùng AI (${data.used_model || 'Flash'}) đọc lại và chuẩn hóa câu ${currentPresIndex + 1}!`);
+            } catch (err) {
+                alert("Lỗi Gemini AI đọc lại câu: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
         function loadSampleToQuickPresent() {
             const sample = `Câu 1: Cho hàm số $y = f(x)$ xác định trên $\mathbb{R}$ và có đồ thị hàm số như hình vẽ bên.
 Hàm số đã cho đồng biến trên khoảng nào dưới đây?
@@ -5558,6 +5902,244 @@ $\int (2x + \sin x) dx = x^2 - \cos x + C$. Chọn B.`;
                 console.error("Export offline error:", err);
                 alert("Không thể xuất file Slide Offline: " + err.message);
             }
+        }
+
+        // ═══════════════════════════════════════════
+        // ✏️ INLINE QUICK SLIDE EDITOR (2 CỘT)
+        // ═══════════════════════════════════════════
+        let editorChoicesState = [];
+
+        function openInlineQuickEditor() {
+            if (!presSlides || presSlides.length === 0 || currentPresIndex >= presSlides.length) {
+                showToast("⚠️ Không có câu hỏi nào trên màn hình để chỉnh sửa!");
+                return;
+            }
+
+            const slide = presSlides[currentPresIndex];
+            const modal = document.getElementById('inlineSlideEditorModal');
+            if (!modal) return;
+
+            document.getElementById('editorSlideBadge').textContent = slide.title || `Câu ${currentPresIndex + 1}`;
+            document.getElementById('editorTitleInput').value = slide.title || `Câu ${currentPresIndex + 1}:`;
+            document.getElementById('editorSectionInput').value = slide.section || '';
+            document.getElementById('editorQuestionInput').value = slide.questionText || '';
+            document.getElementById('editorSolutionInput').value = slide.solution || '';
+
+            // Nạp danh sách phương án trắc nghiệm
+            editorChoicesState = [];
+            if (slide.choices && Array.isArray(slide.choices) && slide.choices.length > 0) {
+                editorChoicesState = slide.choices.map(c => ({
+                    label: c.label || '',
+                    text: c.text || '',
+                    isCorrect: !!c.isCorrect
+                }));
+            }
+            renderEditorChoicesList();
+
+            modal.classList.add('active');
+            updateInlineEditorPreview();
+
+            setTimeout(() => {
+                const qInp = document.getElementById('editorQuestionInput');
+                if (qInp) {
+                    qInp.focus();
+                }
+            }, 50);
+        }
+
+        function closeInlineQuickEditor() {
+            const modal = document.getElementById('inlineSlideEditorModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+
+        function renderEditorChoicesList() {
+            const listContainer = document.getElementById('editorChoicesList');
+            if (!listContainer) return;
+
+            if (editorChoicesState.length === 0) {
+                listContainer.innerHTML = `
+                    <div style="font-size:0.85rem; color:#94a3b8; font-style:italic; padding:0.4rem 0;">
+                        Chưa có phương án trắc nghiệm. Bấm 
+                        <button type="button" class="btn btn-outline" onclick="addDefaultChoices()" style="padding:2px 8px; font-size:0.75rem; border-color:#38bdf8; color:#38bdf8;">+ Nạp A, B, C, D</button>
+                        để thêm nhanh 4 phương án.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            editorChoicesState.forEach((c, idx) => {
+                html += `
+                    <div style="display:flex; align-items:center; gap:0.4rem; background:#1e293b; padding:0.35rem 0.5rem; border-radius:6px; border:1px solid #334155;">
+                        <input type="text" value="${escapeHtml(c.label)}" oninput="onEditorChoiceLabelChange(${idx}, this.value)"
+                            style="width:48px; text-align:center; font-weight:700; background:#0f172a; border:1px solid #475569; color:#fde047; padding:0.3rem 0.2rem; border-radius:4px; font-size:0.85rem;">
+                        <input type="text" value="${escapeHtml(c.text)}" oninput="onEditorChoiceTextChange(${idx}, this.value)" placeholder="Nội dung phương án ($...$)"
+                            style="flex:1; background:#0f172a; border:1px solid #475569; color:#f1f5f9; padding:0.35rem 0.6rem; border-radius:4px; font-family:'Consolas', monospace; font-size:0.9rem;">
+                        <label style="display:flex; align-items:center; gap:3px; font-size:0.75rem; color:${c.isCorrect ? '#34d399' : '#94a3b8'}; cursor:pointer; font-weight:${c.isCorrect ? '700' : 'normal'}; white-space:nowrap; padding:0 4px;">
+                            <input type="radio" name="editorCorrectRadio" ${c.isCorrect ? 'checked' : ''} onchange="onEditorChoiceCorrectChange(${idx})" style="cursor:pointer; accent-color:#10b981;">
+                            Đúng
+                        </label>
+                        <button type="button" onclick="removeEditorChoice(${idx})" title="Xóa phương án này"
+                            style="background:transparent; border:none; color:#ef4444; font-size:1rem; cursor:pointer; padding:0 4px; line-height:1;">✕</button>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+        }
+
+        function addDefaultChoices() {
+            editorChoicesState = [
+                { label: 'A.', text: '', isCorrect: false },
+                { label: 'B.', text: '', isCorrect: false },
+                { label: 'C.', text: '', isCorrect: false },
+                { label: 'D.', text: '', isCorrect: false }
+            ];
+            renderEditorChoicesList();
+            updateInlineEditorPreview();
+        }
+
+        function addEditorChoice() {
+            const labels = ['A.', 'B.', 'C.', 'D.', 'E.', 'F.', 'G.', 'H.'];
+            const nextLabel = labels[editorChoicesState.length] || `${String.fromCharCode(65 + editorChoicesState.length)}.`;
+            editorChoicesState.push({ label: nextLabel, text: '', isCorrect: false });
+            renderEditorChoicesList();
+            updateInlineEditorPreview();
+        }
+
+        function removeEditorChoice(idx) {
+            editorChoicesState.splice(idx, 1);
+            renderEditorChoicesList();
+            updateInlineEditorPreview();
+        }
+
+        function onEditorChoiceLabelChange(idx, val) {
+            if (editorChoicesState[idx]) {
+                editorChoicesState[idx].label = val;
+                updateInlineEditorPreview();
+            }
+        }
+
+        function onEditorChoiceTextChange(idx, val) {
+            if (editorChoicesState[idx]) {
+                editorChoicesState[idx].text = val;
+                updateInlineEditorPreview();
+            }
+        }
+
+        function onEditorChoiceCorrectChange(idx) {
+            editorChoicesState.forEach((c, i) => {
+                c.isCorrect = (i === idx);
+            });
+            renderEditorChoicesList();
+            updateInlineEditorPreview();
+        }
+
+        function updateInlineEditorPreview() {
+            const previewBox = document.getElementById('editorLivePreviewContent');
+            if (!previewBox) return;
+
+            const title = document.getElementById('editorTitleInput') ? document.getElementById('editorTitleInput').value.trim() : '';
+            const section = document.getElementById('editorSectionInput') ? document.getElementById('editorSectionInput').value.trim() : '';
+            const qText = document.getElementById('editorQuestionInput') ? document.getElementById('editorQuestionInput').value.trim() : '';
+            const solText = document.getElementById('editorSolutionInput') ? document.getElementById('editorSolutionInput').value.trim() : '';
+
+            const slide = (presSlides && presSlides[currentPresIndex]) ? presSlides[currentPresIndex] : {};
+            let imgSrc = '';
+            if (slide.imageData) {
+                if (slide.imageData.dataUrl) {
+                    imgSrc = slide.imageData.dataUrl;
+                } else if (slide.imageData.imageName && typeof sessionId !== 'undefined' && sessionId) {
+                    imgSrc = `/api/image/${sessionId}/${slide.imageData.imageName}`;
+                }
+            }
+
+            let qBodyHtml = '';
+            if (qText.includes('___PRES_IMAGE___')) {
+                const parts = qText.split('___PRES_IMAGE___');
+                const before = renderPresQuestionText(parts[0].trim());
+                const after = parts.slice(1).map(p => renderPresQuestionText(p.trim())).join('<br>');
+                const imgTag = imgSrc ? `<div style="text-align:center; margin:0.8rem 0;"><img src="${imgSrc}" style="max-height:160px; max-width:100%; border-radius:6px; border:1px solid #334155;"></div>` : '';
+                qBodyHtml = `${before ? `<div style="margin-bottom:0.6rem;">${before}</div>` : ''}${imgTag}${after ? `<div style="margin-top:0.6rem;">${after}</div>` : ''}`;
+            } else {
+                qBodyHtml = renderPresQuestionText(qText);
+                if (imgSrc) {
+                    qBodyHtml += `<div style="text-align:center; margin:0.8rem 0;"><img src="${imgSrc}" style="max-height:160px; max-width:100%; border-radius:6px; border:1px solid #334155;"></div>`;
+                }
+            }
+
+            let choicesHtml = '';
+            if (editorChoicesState && editorChoicesState.length > 0) {
+                choicesHtml += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.5rem; margin-top:1rem;">`;
+                editorChoicesState.forEach((c) => {
+                    const badgeBg = c.isCorrect ? '#10b981' : 'rgba(255,255,255,0.08)';
+                    const badgeColor = c.isCorrect ? '#ffffff' : '#fde047';
+                    const itemBorder = c.isCorrect ? '2px solid #10b981' : '1px solid #334155';
+                    const itemBg = c.isCorrect ? 'rgba(16,185,129,0.12)' : 'rgba(15,23,42,0.6)';
+
+                    choicesHtml += `
+                        <div style="display:flex; align-items:flex-start; gap:0.5rem; padding:0.5rem 0.7rem; border-radius:8px; border:${itemBorder}; background:${itemBg};">
+                            <span style="font-weight:800; font-size:0.95rem; background:${badgeBg}; color:${badgeColor}; padding:2px 8px; border-radius:4px; min-width:28px; text-align:center;">${escapeHtml(c.label)}</span>
+                            <div style="flex:1; font-size:0.95rem; line-height:1.4;">${richPresMath(c.text || '')}</div>
+                            ${c.isCorrect ? '<span style="color:#10b981; font-weight:700; font-size:0.85rem;">✓</span>' : ''}
+                        </div>
+                    `;
+                });
+                choicesHtml += `</div>`;
+            }
+
+            let solHtml = '';
+            if (solText) {
+                let cleanSol = solText.replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
+                solHtml = `
+                    <div style="margin-top:1rem; padding:0.8rem 1rem; border-radius:8px; background:rgba(251,191,36,0.08); border-left:4px solid #f59e0b;">
+                        <div style="font-weight:700; color:#ffd84d; font-size:0.85rem; margin-bottom:0.3rem;">💡 HƯỚNG DẪN GIẢI CHI TIẾT</div>
+                        <div style="font-size:0.92rem; line-height:1.5;">${richPresMath(cleanSol)}</div>
+                    </div>
+                `;
+            }
+
+            previewBox.innerHTML = `
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.8rem;">
+                    ${section ? `<span style="background:rgba(14,165,233,0.18); color:#38bdf8; border:1px solid rgba(14,165,233,0.35); font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:4px;">${escapeHtml(section)}</span>` : ''}
+                    <span style="background:#f59e0b; color:#0f172a; font-weight:800; font-size:0.85rem; padding:2px 8px; border-radius:4px;">${escapeHtml(title || 'Câu hỏi')}</span>
+                    <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Câu ${currentPresIndex + 1} / ${presSlides.length}</span>
+                </div>
+                <div style="font-size:1.05rem; line-height:1.6; color:#f8fafc;">
+                    ${qBodyHtml}
+                </div>
+                ${choicesHtml}
+                ${solHtml}
+            `;
+        }
+
+        function saveInlineQuickEditor() {
+            if (!presSlides || presSlides.length === 0 || currentPresIndex >= presSlides.length) return;
+            const slide = presSlides[currentPresIndex];
+
+            const newTitle = document.getElementById('editorTitleInput') ? document.getElementById('editorTitleInput').value.trim() : '';
+            const newSection = document.getElementById('editorSectionInput') ? document.getElementById('editorSectionInput').value.trim() : '';
+            const newQuestionText = document.getElementById('editorQuestionInput') ? document.getElementById('editorQuestionInput').value.trim() : '';
+            const newSolution = document.getElementById('editorSolutionInput') ? document.getElementById('editorSolutionInput').value.trim() : '';
+
+            // Cập nhật slide
+            if (newTitle) slide.title = newTitle;
+            slide.section = newSection;
+            slide.questionText = newQuestionText;
+            slide.solution = newSolution || null;
+
+            // Cập nhật choices
+            slide.choices = editorChoicesState.map(c => ({
+                label: (c.label || '').trim(),
+                text: autoWrapChoiceMath((c.text || '').trim()),
+                isCorrect: !!c.isCorrect
+            }));
+
+            // Re-render slide tức thì
+            renderCurrentPresSlide();
+            closeInlineQuickEditor();
+            showToast(`✏️ Đã lưu và cập nhật ${slide.title || 'Slide'} tức thì!`);
         }
 
     </script>

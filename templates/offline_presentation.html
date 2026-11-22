@@ -29,6 +29,10 @@
         .q-badge { background: #ffd84d; color: #183b31; font-weight: 800; font-size: calc(var(--pres-font-size, 24px) * 0.95); padding: 0.35rem 1.2rem; border-radius: 999px; box-shadow: 0 4px 14px rgba(255, 216, 77, 0.35); }
         .theme-whiteboard .q-badge { background: #f59e0b; color: #000; }
         .q-body { font-size: var(--pres-font-size, 26px); line-height: 1.6; margin: 1rem 0; text-align: justify; }
+        .pres-sub-item { display: flex; align-items: baseline; gap: 0.65rem; margin: 0.45rem 0; padding: 0.35rem 0.75rem; border-radius: 8px; background: rgba(255, 255, 255, 0.04); border-left: 3.5px solid rgba(56, 189, 248, 0.55); transition: all 0.2s ease; }
+        .pres-sub-item:hover { background: rgba(255, 255, 255, 0.075); border-left-color: #38bdf8; transform: translateX(3px); }
+        .pres-sub-item-badge { font-weight: 800; font-size: 1.05em; color: #38bdf8; flex-shrink: 0; min-width: 1.8rem; display: inline-block; letter-spacing: 0.5px; }
+        .pres-sub-item-content { flex: 1; line-height: 1.55; text-align: left; }
         .image-wrapper { text-align: center; margin: 0.8rem 0; display: flex; justify-content: center; align-items: center; width: 100%; }
         .image-wrapper img { max-height: var(--pres-img-max-height, 40vh); max-width: 90%; height: auto; border-radius: 8px; box-shadow: none !important; border: 1.5px solid rgba(56, 189, 248, 0.35); background: #fff; padding: 5px; object-fit: contain; cursor: zoom-in; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s ease; }
         .image-wrapper img:hover { transform: scale(1.02); border-color: rgba(56, 189, 248, 0.85); }
@@ -151,18 +155,23 @@
                 .trim().length;
         }
 
+        // 🛡️ KHÓA KÉT SẮT CÔNG THỨC TOÁN (MATH IMMUTABILITY - CHUẨN AZOTA):
         function autoWrapOfflineMath(text) {
-            if (!text) return '';
-            text = text.replace(/(?<!\$)\\(?:frac|dfrac|tfrac)\{([^{}]+)\}\{([^{}]+)\}(?!\$)/g, '$\\frac{$1}{$2}$');
-            text = text.replace(/(?<!\$)\\(?:sqrt)(?:\[[^\]]*\])?\{([^{}]+)\}(?!\$)/g, '$$&$');
-            text = text.replace(/(?<!\$)\\(?:vec|overrightarrow)\{([^{}]+)\}(?!\$)/g, '$$&$');
+            if (!text || typeof text !== 'string') return text || '';
+            if (text.includes('$') || text.includes('\\(') || text.includes('\\[') || text.includes('$$')) {
+                return text;
+            }
+            text = text.replace(/\\(?:frac|dfrac|tfrac)\{([^{}]+)\}\{([^{}]+)\}/g, '$\\frac{$1}{$2}$');
+            text = text.replace(/\\(?:sqrt)(?:\[[^\]]*\])?\{([^{}]+)\}/g, (m) => '$' + m + '$');
+            text = text.replace(/\\(?:vec|overrightarrow)\{([^{}]+)\}/g, (m) => '$' + m + '$');
             text = text.replace(/(?<![\$\w])([a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+(?:\s*[,;]\s*[a-zA-Z][\^_]\{[^{}]+\}\s*=\s*[-+]?[a-zA-Z0-9\.\/]+)*)(?![\$\w])/g, '$$1$');
             return text;
         }
 
         function richPresMath(text) {
             if (!text) return '';
-            const norm = autoWrapOfflineMath(normalizeInputText(text));
+            // 🛡️ MATH IMMUTABILITY: Mọi công thức trong $..$ và $$..$$ là BẤT KHẢ XÂM PHẠM, KaTeX render trực tiếp 100%
+            const norm = normalizeInputText(text);
             const mathRegex = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g;
             let out = '';
             let lastIndex = 0;
@@ -398,12 +407,24 @@
             lines.forEach(l => {
                 const t = l.trim();
                 if (t.startsWith('|') && (t.match(/\|/g) || []).length >= 2) tableBuf.push(t);
-                else { flush(); if (t) outputParts.push(richPresMath(t)); }
+                else {
+                    flush();
+                    if (t) {
+                        const subMatch = t.match(/^([a-l][\)\/\.]|\([a-l]\)|[1-9]\d?[\)\/\.]|\([1-9]\d?\))\s+(.*)$/i);
+                        if (subMatch) {
+                            const lbl = subMatch[1].trim();
+                            const subBody = subMatch[2].trim();
+                            outputParts.push('<div class="pres-sub-item"><span class="pres-sub-item-badge">' + escapeHtml(lbl) + '</span><div class="pres-sub-item-content">' + richPresMath(subBody) + '</div></div>');
+                        } else {
+                            outputParts.push(richPresMath(t));
+                        }
+                    }
+                }
             });
             flush();
             let res = '';
             outputParts.forEach(p => {
-                if (p.includes('class="pres-table-wrapper"')) res += p;
+                if (p.includes('class="pres-table-wrapper"') || p.includes('class="pres-sub-item"')) res += p;
                 else res += (res && !res.endsWith('</div>') ? '<br>' : '') + p;
             });
             return res;

@@ -15,6 +15,20 @@ import zipfile
 from pathlib import Path
 from dotenv import load_dotenv
 
+import sys
+if sys.platform == 'win32':
+    try:
+        from asyncio.proactor_events import _ProactorBasePipeTransport
+        _orig_call_connection_lost = _ProactorBasePipeTransport._call_connection_lost
+        def _silent_call_connection_lost(self, exc):
+            try:
+                _orig_call_connection_lost(self, exc)
+            except (ConnectionResetError, OSError):
+                pass
+        _ProactorBasePipeTransport._call_connection_lost = _silent_call_connection_lost
+    except Exception:
+        pass
+
 import pymupdf as fitz
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Request, Response
@@ -28,7 +42,8 @@ from core.word_exporter import (
     unwrap_vietnamese_math,
     sanitize_text_aesthetics,
     remove_page_footers,
-    auto_wrap_math_symbols
+    auto_wrap_math_symbols,
+    split_sub_items_to_lines
 )
 from core.omml_converter import (
     omml_element_to_latex,
@@ -47,7 +62,7 @@ from core.pdf_native_extractor import (
     find_matching_native_image,
     is_black_or_corrupted_image
 )
-from core.mathtype_extractor import extract_mathtype_from_element
+from core.mathtype_extractor import extract_mathtype_from_element, extract_mathtype_formula
 
 # Load .env
 load_dotenv()
@@ -1156,6 +1171,8 @@ async def ocr_image(
         raw_text = heal_broken_math_and_coords(raw_text)
         # Nối từ bị ngắt dòng sai từ OCR
         raw_text = join_broken_ocr_lines(raw_text)
+        # Tách dòng độc lập cho các ý Đúng/Sai a,b,c,d, ý tự luận a-h và 1,2,3
+        raw_text = split_sub_items_to_lines(raw_text)
         # Tự động cắt hình ảnh/bảng biến thiên từ ảnh gốc
         updated_text, figures = auto_crop_figures(session_id, filename, raw_text)
     except Exception as e:
@@ -1221,6 +1238,8 @@ async def ocr_batch(
             raw_text = heal_broken_math_and_coords(raw_text)
             # Nối từ bị ngắt dòng sai từ OCR
             raw_text = join_broken_ocr_lines(raw_text)
+            # Tách dòng độc lập cho các ý Đúng/Sai a,b,c,d, ý tự luận a-h và 1,2,3
+            raw_text = split_sub_items_to_lines(raw_text)
             updated_text, figures = auto_crop_figures(session_id, fname, raw_text)
             results.append({
                 "filename": fname,
@@ -1317,6 +1336,65 @@ def decode_word_symbol(font: str, char_hex: str) -> str:
     except Exception:
         pass
     return ""
+
+
+def process_blip_formula_or_image(b, doc, pieces, para_images, prev_piece_type):
+    """
+    Xử lý phần tử blip hình ảnh trong Word:
+    1. Ưu tiên kiểm tra xem có phải công thức MathType bị dán/flattened dưới dạng WMF/ảnh không.
+       Nếu có, giải mã trực tiếp thành chuẩn KaTeX ($...$).
+    2. Nếu là hình vẽ/đồ thị thực sự, đưa vào para_images để chiếu 2 cột (Zero-Scroll).
+    3. Tuyệt đối không để rò rỉ mã HTML <img src="data:image/x-wmf..."> ra ngoài text.
+    """
+    rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+    if not (rId and rId in doc.part.rels):
+        return prev_piece_type, 0
+
+    img_part = doc.part.rels[rId].target_part
+    blob = img_part.blob
+    mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
+
+    # 1. Thử giải mã MathType (cả chuỗi TeX và luồng MTEF nhúng trong WMF)
+    mt_tex = extract_mathtype_formula(None, blob)
+    if mt_tex:
+        mt_tex = clean_math_latex(mt_tex)
+        if mt_tex:
+            trailing_punct = ""
+            m_punct = re.search(r'([.,;:?!])$', mt_tex)
+            if m_punct and not re.search(r'\\(?:dots|ldots|cdots)\s*$', mt_tex):
+                trailing_punct = m_punct.group(1)
+                mt_tex = mt_tex[:-1].strip()
+            if prev_piece_type == 'text' and pieces:
+                last_txt = pieces[-1]
+                if last_txt and not last_txt.endswith((' ', '\t', '\n')):
+                    if re.search(r'[a-zA-Zà-ỹÀ-Ỹ0-9\)\}\]]$', last_txt):
+                        pieces.append(" ")
+            pieces.append(f"${mt_tex}${trailing_punct}")
+            return ('punct' if trailing_punct else 'math'), 0
+
+    # 2. Nếu là hình ảnh thông thường
+    b64 = base64.b64encode(blob).decode('utf-8')
+    cx, cy = 0.0, 0.0
+    parent = b.getparent()
+    while parent is not None and not (cx > 0 and cy > 0):
+        for ext in parent.xpath('.//*[local-name()="extent"]'):
+            cx = int(ext.get('cx', 0)) / 914400 * 2.54
+            cy = int(ext.get('cy', 0)) / 914400 * 2.54
+            if cx > 0:
+                break
+        parent = parent.getparent()
+        if parent is not None and parent.tag.endswith(('p', 'body')):
+            break
+
+    # Nếu là đồ thị / hình vẽ thực sự
+    if cx >= 2.8 or cy >= 1.8 or (cx == 0.0 and cy == 0.0):
+        para_images.append(f"data:{mime};base64,{b64}")
+        return prev_piece_type, 1
+    elif 'wmf' not in mime.lower():
+        para_images.append(f"data:{mime};base64,{b64}")
+        return prev_piece_type, 1
+
+    return prev_piece_type, 0
 
 
 @app.post("/api/parse-docx-file")
@@ -1419,26 +1497,12 @@ async def parse_docx_file(file: UploadFile = File(...)):
                             pieces.append(r_text)
                             prev_piece_type = 'text'
 
-                        # Bóc tách ảnh từ w:r (chỉ lấy drawing thực sự, không lấy ảnh snapshot MathType)
+                        # Bóc tách ảnh từ w:r (chỉ lấy drawing thực sự, giải mã nếu là công thức MathType)
                         for b in child.xpath('.//*[local-name()="blip"]'):
-                            rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                            if rId and rId in doc.part.rels:
-                                img_part = doc.part.rels[rId].target_part
-                                b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                # Kiểm tra kích thước hình ảnh từ thẻ extent (EMU -> cm)
-                                cx, cy = 0.0, 0.0
-                                for ext in child.xpath('.//*[local-name()="extent"]'):
-                                    cx = int(ext.get('cx', 0)) / 914400 * 2.54
-                                    cy = int(ext.get('cy', 0)) / 914400 * 2.54
-                                    if cx > 0:
-                                        break
-                                if cx > 0 and cy > 0 and cx < 2.8 and cy < 1.8:
-                                    pieces.append(f'<img src="data:{mime};base64,{b64}" class="inline-math-img" style="vertical-align:middle; max-height:2.2em; display:inline-block; margin:0 4px;" alt="formula">')
-                                    prev_piece_type = 'text'
-                                else:
-                                    para_images.append(f"data:{mime};base64,{b64}")
-                                    img_count += 1
+                            prev_piece_type, img_added = process_blip_formula_or_image(
+                                b, doc, pieces, para_images, prev_piece_type
+                            )
+                            img_count += img_added
 
                     # Run công thức toán học chuẩn OMML (Phân số, số mũ, căn, vectơ, ngoặc...)
                     elif tag.endswith('oMath') or tag.endswith('oMathPara'):
@@ -1478,15 +1542,11 @@ async def parse_docx_file(file: UploadFile = File(...)):
                                 pieces.append(f"${mt_tex}${trailing_punct}")
                                 prev_piece_type = 'punct' if trailing_punct else 'math'
                         else:
-                            # Nếu không phải MathType (ví dụ OLE Excel, biểu đồ khác) thì mới bóc tách ảnh
                             for b in child.xpath('.//*[local-name()="blip"]'):
-                                rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                                if rId and rId in doc.part.rels:
-                                    img_part = doc.part.rels[rId].target_part
-                                    b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                    mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                    para_images.append(f"data:{mime};base64,{b64}")
-                                    img_count += 1
+                                prev_piece_type, img_added = process_blip_formula_or_image(
+                                    b, doc, pieces, para_images, prev_piece_type
+                                )
+                                img_count += img_added
                             for b in child.xpath('.//*[local-name()="imagedata"]'):
                                 rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
                                 if rId and rId in doc.part.rels:
@@ -1499,23 +1559,10 @@ async def parse_docx_file(file: UploadFile = File(...)):
                     # Khung vẽ / Hình ảnh (Drawing) trực tiếp
                     elif tag.endswith('drawing'):
                         for b in child.xpath('.//*[local-name()="blip"]'):
-                            rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                            if rId and rId in doc.part.rels:
-                                img_part = doc.part.rels[rId].target_part
-                                b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                cx, cy = 0.0, 0.0
-                                for ext in child.xpath('.//*[local-name()="extent"]'):
-                                    cx = int(ext.get('cx', 0)) / 914400 * 2.54
-                                    cy = int(ext.get('cy', 0)) / 914400 * 2.54
-                                    if cx > 0:
-                                        break
-                                if cx > 0 and cy > 0 and cx < 2.8 and cy < 1.8:
-                                    pieces.append(f'<img src="data:{mime};base64,{b64}" class="inline-math-img" style="vertical-align:middle; max-height:2.2em; display:inline-block; margin:0 4px;" alt="formula">')
-                                    prev_piece_type = 'text'
-                                else:
-                                    para_images.append(f"data:{mime};base64,{b64}")
-                                    img_count += 1
+                            prev_piece_type, img_added = process_blip_formula_or_image(
+                                b, doc, pieces, para_images, prev_piece_type
+                            )
+                            img_count += img_added
 
                     # Xử lý AlternateContent (Choice/Fallback trong Word)
                     elif tag.endswith('AlternateContent'):
@@ -1540,13 +1587,10 @@ async def parse_docx_file(file: UploadFile = File(...)):
                                     prev_piece_type = 'punct' if trailing_punct else 'math'
                             else:
                                 for b in target_node.xpath('.//*[local-name()="blip"]'):
-                                    rId = b.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                                    if rId and rId in doc.part.rels:
-                                        img_part = doc.part.rels[rId].target_part
-                                        b64 = base64.b64encode(img_part.blob).decode('utf-8')
-                                        mime = getattr(img_part, 'content_type', 'image/png') or 'image/png'
-                                        para_images.append(f"data:{mime};base64,{b64}")
-                                        img_count += 1
+                                    prev_piece_type, img_added = process_blip_formula_or_image(
+                                        b, doc, pieces, para_images, prev_piece_type
+                                    )
+                                    img_count += img_added
 
                 p_text = ''.join(pieces).strip()
                 if p_text:
@@ -1612,6 +1656,8 @@ async def parse_docx_file(file: UploadFile = File(...)):
 
         # 4b. CHUẨN HÓA VECTƠ TOÀN DIỆN (CẢ TRONG MATH VÀ TEXT NGOÀI)
         full_text = sanitize_plain_text_vectors(full_text)
+        # Tách dòng độc lập cho các ý Đúng/Sai a,b,c,d, ý tự luận a-h và 1,2,3
+        full_text = split_sub_items_to_lines(full_text)
 
         # 4c. TỰ ĐỘNG BỌC CÔNG THỨC TOÁN HỌC CÒN THIẾU DẤU $ (x_{CĐ} = 4, x_{CT} = 0, y = 2x - 1...)
         full_text = auto_wrap_math_symbols(full_text)
@@ -1670,82 +1716,196 @@ async def export_slide_offline(request: Request):
         raise HTTPException(500, f"Lỗi đóng gói Slide Offline: {str(e)}")
 
 
-@app.post("/api/ai-solve-question")
-async def ai_solve_question(request: Request):
+def safe_parse_gemini_json(s: str, fallback_question: str = "", fallback_choices: list = None) -> dict:
     """
-    Sử dụng Gemini AI để giải câu hỏi toán học trên slide theo thời gian thực:
-    - Tìm đáp án đúng A, B, C, D (nếu là trắc nghiệm).
-    - Cung cấp lời giải chi tiết từng bước bằng công thức toán KaTeX ($...$).
+    Trích xuất an toàn câu hỏi và phương án từ phản hồi của Gemini:
+    Hỗ trợ cả định dạng JSON (kể cả có escape LaTeX), định dạng thẻ [ĐỀ BÀI] / [PHƯƠNG ÁN],
+    hoặc văn bản thuần A. B. C. D. Không bao giờ quăng lỗi làm sập request!
+    """
+    if fallback_choices is None:
+        fallback_choices = []
+    if not s or not s.strip():
+        return {"question": fallback_question, "choices": fallback_choices}
+
+    s = s.strip()
+
+    # 1. Thử bóc tách nếu có khối JSON
+    m_json = re.search(r'\{[\s\S]*\}', s)
+    if m_json:
+        j_block = m_json.group(0).strip()
+        try:
+            data = json.loads(j_block)
+            if isinstance(data, dict):
+                return {
+                    "question": data.get("question", fallback_question),
+                    "choices": data.get("choices", fallback_choices)
+                }
+        except Exception:
+            pass
+
+        try:
+            fixed = re.sub(r'\\(?![/"\\bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', j_block)
+            fixed = re.sub(r',\s*([\]\}])', r'\1', fixed)
+            data = json.loads(fixed)
+            if isinstance(data, dict):
+                return {
+                    "question": data.get("question", fallback_question),
+                    "choices": data.get("choices", fallback_choices)
+                }
+        except Exception:
+            pass
+
+    # 2. Thử bóc tách theo khối văn bản tự nhiên [ĐỀ BÀI] / [CÂU HỎI]
+    q_text = ""
+    choices = []
+    m_q = re.search(r'\[(?:ĐỀ\s*BÀI|CÂU\s*HỎI|NỘI\s*DUNG)\]\s*:?\s*([\s\S]*?)(?=\[(?:PHƯƠNG\s*ÁN|CÁC\s*PHƯƠNG\s*ÁN|LỰA\s*CHỌN)\]|\n\s*[A-D]\.\s+|\Z)', s, re.I)
+    if m_q and m_q.group(1).strip():
+        q_text = m_q.group(1).strip()
+
+    # Bóc tách các phương án A, B, C, D từ các dòng
+    lines = s.splitlines()
+    for line in lines:
+        line_str = line.strip()
+        m_line = re.match(r'^([A-D])\.\s*(.+)$', line_str)
+        if m_line:
+            choices.append({"label": f"{m_line.group(1)}.", "text": m_line.group(2).strip()})
+
+    if not choices:
+        for m in re.finditer(r'(?:^|\n|\s{2,})([A-D])\.\s*([^\n\r]+)', s):
+            choices.append({"label": f"{m.group(1)}.", "text": m.group(2).strip()})
+        seen = set()
+        clean_c = []
+        for c in choices:
+            if c['label'] not in seen:
+                seen.add(c['label'])
+                clean_c.append(c)
+        choices = clean_c if len(clean_c) >= 2 else []
+
+    if not q_text:
+        m_before_a = re.split(r'\n\s*A\.\s+', s, maxsplit=1)
+        if len(m_before_a) > 1 and m_before_a[0].strip():
+            q_text = m_before_a[0].strip()
+        else:
+            q_text = s
+
+    q_text = re.sub(r'^\[(?:ĐỀ\s*BÀI|CÂU\s*HỎI|NỘI\s*DUNG)\]\s*:?\s*', '', q_text, flags=re.I).strip()
+    q_text = re.sub(r'^```[a-z]*\s*', '', q_text, flags=re.I)
+    q_text = re.sub(r'\s*```$', '', q_text).strip()
+
+    return {
+        "question": q_text or fallback_question,
+        "choices": choices if choices else fallback_choices
+    }
+
+
+@app.post("/api/ai-ocr-question")
+async def ai_ocr_question(request: Request):
+    """
+    Dùng Gemini AI đọc lại và chuẩn hóa một câu hỏi toán học (OCR / Math Fallback):
+    - Đọc lại công thức từ văn bản bị lỗi hoặc từ hình ảnh câu hỏi.
+    - Chuẩn hóa toàn bộ công thức sang định dạng KaTeX ($...$).
+    - Trả về câu hỏi và danh sách đáp án A, B, C, D đã được làm sạch để slide cập nhật tức thì.
     """
     try:
-        body = await request.json()
-        question_text = body.get('question_text', '').strip()
-        if not question_text:
-            raise HTTPException(400, "Nội dung câu hỏi không được để trống!")
+        data = await request.json()
+        question_text = data.get("question_text", "").strip()
+        choices = data.get("choices", [])
+        images = data.get("images", [])
+        api_keys_str = data.get("api_keys", "")
+        model_name = data.get("model_name", "auto")
 
-        choices = body.get('choices', [])
-        api_keys_raw = body.get('api_keys', '[]')
-        model_name = body.get('model_name', 'auto')
+        if not question_text and not images:
+            raise HTTPException(400, "Thiếu dữ liệu câu hỏi hoặc hình ảnh để đọc lại!")
 
-        keys = []
-        if api_keys_raw:
+        # Gom danh sách API key
+        active_keys = list(DEFAULT_API_KEYS)
+        if api_keys_str:
             try:
-                keys = json.loads(api_keys_raw) if isinstance(api_keys_raw, str) else api_keys_raw
+                parsed = json.loads(api_keys_str) if api_keys_str.startswith('[') else re.split(r'[,;\n\r]+', api_keys_str)
+                for k in parsed:
+                    k = str(k).strip()
+                    if k and k not in active_keys:
+                        active_keys.insert(0, k)
             except Exception:
-                keys = []
+                pass
 
-        # Xây dựng prompt giải toán chuẩn mực sư phạm
-        prompt = f"""Bạn là một chuyên gia giáo viên Toán học THPT xuất sắc.
-Hãy giải chi tiết câu hỏi toán học sau đây:
+        choices_formatted = []
+        for c in choices:
+            label = c.get("label", "")
+            text = c.get("text", "")
+            choices_formatted.append(f"{label} {text}")
+        choices_text = "\n".join(choices_formatted) if choices_formatted else ""
 
-ĐỀ BÀI:
+        prompt = f"""Bạn là chuyên gia số hóa đề thi Toán học THPT Việt Nam.
+Nhiệm vụ của bạn: Hãy đọc lại, sửa lỗi và chuẩn hóa nội dung câu hỏi toán học sau đây (đặc biệt là các công thức toán bị lỗi cú pháp, bị dính chữ, hoặc bị dán nhầm mã HTML):
+
+[NỘI DUNG CÂU HỎI HIỆN TẠI]:
 {question_text}
 """
-        if choices:
-            prompt += "\nCÁC PHƯƠNG ÁN LỰA CHỌN:\n"
-            for c in choices:
-                lbl = c.get('label', '')
-                txt = c.get('text', '')
-                prompt += f"{lbl} {txt}\n"
+        if choices_text:
+            prompt += f"""
+[CÁC PHƯƠNG ÁN LỰA CHỌN]:
+{choices_text}
+"""
 
         prompt += """
-YÊU CẦU ĐẦU RA BẮT BUỘC:
-1. Dòng đầu tiên ghi rõ phương án đúng (nếu có lựa chọn trắc nghiệm):
-   Ví dụ: "ĐÁP ÁN: A" hoặc "ĐÁP ÁN: C" (nếu là tự luận thì ghi "ĐÁP ÁN: TỰ LUẬN").
-2. Phần tiếp theo trình bày lời giải chi tiết, rõ ràng từng bước.
-3. Mọi công thức toán học PHẢI được đặt trong cặp dấu $...$ (inline) hoặc $$...$$ (display).
-4. Ngắn gọn, chuẩn xác, chuẩn mực sư phạm.
+QUY TẮC BẮT BUỘC:
+1. Mọi công thức toán học, biểu thức, biến số, phân số, vectơ, tọa độ, hệ phương trình BẮT BUỘC viết dưới dạng chuẩn KaTeX đặt trong cặp dấu $...$ (ví dụ: $y = \\frac{x-1}{x+1}$, $[0; 3]$, $\\vec{a}$, $\\min\\limits_{[0; 3]} y = -3$).
+2. Giữ nguyên toàn bộ nội dung đề bài và các phương án, chỉ sửa lỗi công thức, loại bỏ thẻ HTML rác (như <img...>), và chuẩn hóa định dạng.
+3. Trình bày rõ ràng theo định dạng sau:
+[ĐỀ BÀI]:
+Nội dung câu hỏi đã chuẩn hóa KaTeX
+
+[PHƯƠNG ÁN]:
+A. Nội dung phương án A
+B. Nội dung phương án B
+C. Nội dung phương án C
+D. Nội dung phương án D
+(Nếu không có phương án trắc nghiệm thì chỉ ghi phần [ĐỀ BÀI]).
 """
-        response_text, used_model = await _generate_content_with_retry(
-            img=None,
+        pil_img = None
+        if images and isinstance(images, list):
+            for img_item in images:
+                if not isinstance(img_item, str):
+                    continue
+                if img_item.startswith('data:image'):
+                    try:
+                        header, b64_data = img_item.split(',', 1)
+                        if 'wmf' not in header.lower():
+                            img_bytes = base64.b64decode(b64_data)
+                            pil_img = Image.open(io.BytesIO(img_bytes))
+                            break
+                    except Exception:
+                        pass
+                elif img_item.startswith('/api/image/'):
+                    try:
+                        rel = img_item.replace('/api/image/', '', 1).strip('/')
+                        fpath = TEMP_DIR / rel
+                        if fpath.exists():
+                            pil_img = Image.open(fpath)
+                            break
+                    except Exception:
+                        pass
+
+        raw_output, used_model = await _generate_content_with_retry(
+            img=pil_img,
             prompt_text=prompt,
             model_name=model_name or "auto",
-            api_keys=keys,
+            api_keys=active_keys,
             timeout_seconds=25.0
         )
 
-        if not response_text:
-            raise HTTPException(500, "Gemini không trả về kết quả lời giải!")
-
-        # Bóc tách correct_label (A, B, C, D)
-        correct_label = None
-        m_ans = re.search(r'ĐÁP ÁN\s*:?\s*([A-D])', response_text, re.IGNORECASE)
-        if not m_ans:
-            m_ans = re.search(r'(?:Chọn|Phương án đúng là|Đáp án đúng là)\s*:?\s*([A-D])', response_text, re.IGNORECASE)
-        if m_ans:
-            correct_label = m_ans.group(1).upper()
-
-        clean_solution = response_text.strip()
-
+        result_data = safe_parse_gemini_json(raw_output, fallback_question=question_text, fallback_choices=choices)
         return {
-            "solution": clean_solution,
-            "correct_label": correct_label,
+            "success": True,
+            "question": result_data.get("question", question_text),
+            "choices": result_data.get("choices", choices),
             "used_model": used_model
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(500, f"Lỗi giải đề bằng AI: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Lỗi Gemini AI đọc lại câu hỏi: {str(e)}")
 
 
 @app.post("/api/ai-solve-question")
@@ -1891,6 +2051,9 @@ async def export_docx(
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     port = int(os.environ.get("PORT", 8000))
     print("\n" + "=" * 55)
     print(f"  📐 Math OCR Tool — Port: {port}")

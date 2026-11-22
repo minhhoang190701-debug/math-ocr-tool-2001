@@ -1304,15 +1304,36 @@ def normalize_choice_structure(text: str) -> str:
     )
     text = choice_pattern.sub(r'\n\n\1', text)
 
-    # Tách dòng trước B., C., D. khi đã có A. (bảo vệ tuyệt đối không tách nhầm Chọn D., Đáp án D.)
+    # Tách dòng trước B., C., D. KHI VÀ CHỈ KHI TRONG CÂU ĐÃ XUẤT HIỆN A.
+    # Tuyệt đối không chém đôi câu văn hình học (như "...hai điểm A, B. Khoảng cách...")
     def _split_choice_bcd(m):
         full = m.group(0)
-        lbl = m.group(1)
+        lbl = m.group(1).strip()
         start = m.start()
-        prefix = text[max(0, start - 20):start].lower()
+        prefix = text[max(0, start - 35):start].lower()
         if re.search(r'\b(?:chọn|đáp\s*án|phương\s*án)\s*[:\.]?\s*$', prefix):
             return full
-        return f"\n\n{lbl}"
+        # Tuyệt đối không tách nếu trước B., C., D. là từ chỉ điểm hình học, đoạn thẳng, đỉnh, hoặc dấu phẩy
+        if re.search(r'(?:điểm|đỉnh|đoạn|tam\s*giác|tứ\s*diện|mặt\s*phẳng|đường\s*thẳng|tại|với|và|hoặc|,)\s*[A-Z]?\s*,?\s*$', prefix):
+            return full
+
+        # Xác định phạm vi câu hỏi hiện tại (từ Câu/Bài gần nhất đến vị trí hiện tại)
+        last_q = list(re.finditer(r'(?:^|\n)\s*(?:Câu|Bài|Đề|Ví dụ)\s+\d+[\.:]', text[:start]))
+        q_start = last_q[-1].start() if last_q else 0
+        q_text = text[q_start:start]
+
+        # 🎯 CHỈ nhận B. là phương án khi trong câu đã xuất hiện A.
+        if lbl.startswith('B.'):
+            if not re.search(r'(?:^|\n|\s{2,})A\.\s+', q_text):
+                return full
+        elif lbl.startswith('C.'):
+            if not re.search(r'(?:^|\n|\s{2,})B\.\s+', q_text):
+                return full
+        elif lbl.startswith('D.'):
+            if not re.search(r'(?:^|\n|\s{2,})C\.\s+', q_text):
+                return full
+
+        return f"\n\n{lbl} "
 
     text = re.sub(r'(?<!\n)\s*(\b[B-D]\.\s+)', _split_choice_bcd, text)
 
@@ -1334,6 +1355,123 @@ def normalize_choice_structure(text: str) -> str:
 
     # Tách lại lần 2 nếu có cụm Lời giải / Chọn [A-D] còn sót
     text = sol_inline_pattern.sub(r'\1\n\n\2', text)
+
+    return text
+
+
+def split_sub_items_to_lines(text: str) -> str:
+    """
+    Tự động nhận diện và ngắt dòng riêng biệt cho các ý con trong đề thi:
+    1. Câu hỏi Đúng / Sai (Phần II) với 4 ý nhỏ: a), b), c), d) (hoặc a/, (a), a.)
+    2. Câu hỏi Tự luận nhiều ý từ a), b), c)... đến e), f), g), h)...
+    3. Câu hỏi nhiều ý dạng số: 1), 2), 3)... (hoặc 1/, (1), 1.)
+
+    Cơ chế bảo vệ:
+    - Mask toàn bộ placeholder [HÌNH_VẼ...] và [BẢNG...].
+    - Mask toàn bộ Math blocks $...$ và $$...$$ để bảo vệ tuyệt đối tọa độ, hàm số, phương trình.
+    - Mask toàn bộ Tiêu đề PHẦN để không cắt vào cụm 'a), b), c), d)' trong câu chỉ dẫn đề thi.
+    - Loại trừ các trường hợp bẫy: dấu phẩy phía trước, các từ 'ý', 'trong ý', 'mỗi ý', 'đồ thị', 'đường cong', 'mặt phẳng'...
+    """
+    if not text:
+        return ""
+
+    # 1. Mask Placeholders
+    text, tag_map = mask_placeholders(text)
+
+    # 2. Mask Math Blocks ($...$ và $$...$$)
+    text, math_map = mask_math_blocks(text)
+
+    # 3. Mask Tiêu đề PHẦN (PHẦN I, PHẦN II... để bảo vệ câu chỉ dẫn 'Trong mỗi ý a), b), c), d)...')
+    sec_pattern = re.compile(
+        r'(?<!\n)\s*(\b(?:[IVXLCDM]+\.|\d+\.|\b[A-Z]\.)?\s*(?:PHẦN|Phần)\s+(?:[IVXLCDM]+|\d+|[A-D]\b|TRẮC|TỰ|MỘT|HAI|BA|BỐN|NĂM|THỨ)[^\n]*)'
+    )
+    sec_map = {}
+    sec_cnt = 0
+    def _mask_sec(m):
+        nonlocal sec_cnt
+        tok = f"@@__TEMP_SECTION_HDR_{sec_cnt}__@@"
+        sec_map[tok] = m.group(1).strip()
+        sec_cnt += 1
+        return f"\n\n{tok}\n\n"
+    text = sec_pattern.sub(_mask_sec, text)
+
+    # 4. TÁCH DÒNG CÁC Ý CHỮ CÁI: a), b), c), d), e), f), g), h), i), j), k), l)...
+    # Hỗ trợ dạng: a), (a), a/ và a. (với dạng chấm a. bắt buộc có khoảng trắng tách biệt và sau dấu câu để không nhầm chữ cái cuối từ như 'phẳng.')
+    
+    # 4.1 Tách ý 'a)' đầu tiên khi đi sau dấu kết thúc câu (., ?, !, :, ;) hoặc điểm số hoặc placeholder
+    text = re.sub(
+        r'([\.\?!:;\)]|\bđiểm\)|@@__PLACEHOLDER_IMG_TAG_\d+__@@)\s+([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])',
+        r'\1\n\n\2 ',
+        text
+    )
+
+    # 4.2 Tách ý 'a)' đứng độc lập nếu theo sau có 'b)' trong cùng khối
+    text = re.sub(
+        r'(?:^|(?<=\s))\s*([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=(?:(?!Câu|Bài|PHẦN|Phần)[\s\S])*?[b-l][\)\/\.])',
+        r'\n\n\1 ',
+        text
+    )
+
+    # 4.3 Tách các ý tiếp theo: b), c), d), e), f), g), h), i), j), k), l)...
+    def _split_letter_item_repl(m):
+        full = m.group(0)
+        start = m.start()
+        prefix = text[max(0, start - 35):start].lower()
+        # Bỏ qua nếu có dấu phẩy ',' hoặc ';' ngay trước nhãn (ví dụ 'a), b), c), d)' trong câu chỉ dẫn)
+        if re.search(r'[,;:\-\+]\s*$', prefix):
+            return full
+        # Bỏ qua nếu đứng sau các từ chỉ định ý: 'ý', 'mỗi ý', 'trong ý', 'các ý', 'và', 'hoặc', 'đồ thị', 'đường cong', 'mặt phẳng', 'điểm'
+        if re.search(r'\b(?:ý|các\s+ý|mỗi\s+ý|trong\s+ý|và|hoặc|đồ\s+thị|đường\s+cong|đường\s+tròn|mặt\s+phẳng|điểm|hàm\s+số)\s*$', prefix):
+            return full
+        # Bỏ qua nếu có dấu mở ngoặc '(' chưa đóng trong phạm vi 30 ký tự (tránh trong biểu thức / tọa độ)
+        if '(' in prefix and ')' not in prefix[prefix.rfind('('):]:
+            return full
+        lbl = m.group(1)
+        return f"\n\n{lbl} "
+
+    # Với dạng chấm [b-l]\. bắt buộc phải có khoảng trắng trước đó và nằm sau dấu kết thúc câu
+    letter_pattern = re.compile(r'(?:^|(?<=\s))\s*([b-l][\)\/]|\([b-l]\)|\b[b-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])')
+    text = letter_pattern.sub(_split_letter_item_repl, text)
+
+    # 5. TÁCH DÒNG CÁC Ý DẠNG SỐ: 1), 2), 3), 4), 5), 6), 7), 8), 9)...
+    # Hỗ trợ dạng: 1), (1), 1/ và 1. (chỉ nhận 1. khi sau kết thúc câu và theo sau là chữ hoa)
+    def _split_num_item_repl(m):
+        full = m.group(0)
+        start = m.start()
+        prefix = text[max(0, start - 35):start].lower()
+        # Bỏ qua nếu có dấu mở ngoặc '(' chưa đóng (tọa độ điểm ví dụ (1; 2; 3))
+        if '(' in prefix and ')' not in prefix[prefix.rfind('('):]:
+            return full
+        # Bỏ qua nếu phía trước là dấu phẩy hoặc chấm phẩy
+        if re.search(r'[,;:\-\+]\s*$', prefix):
+            return full
+        # Bỏ qua các từ liên quan đến thời gian, đề thi, số thứ tự hành chính:
+        # 'từ 1 đến 4', 'câu 1', 'bài 1', 'phần 1', 'ngày 1', 'lớp 12', 'trang 1', 'mã đề 1', 'bước 1'
+        if re.search(r'\b(?:từ|đến|ở|trong|câu|bài|phần|ngày|tháng|năm|lớp|trang|bước|mã\s+đề|đề|thứ|khoảng|đoạn)\s*$', prefix):
+            return full
+        lbl = m.group(1)
+        return f"\n\n{lbl} "
+
+    # 5.1 Tách ý số sau dấu câu hoặc điểm số:
+    text = re.sub(
+        r'([\.\?!:;\)]|\bđiểm\)|@@__PLACEHOLDER_IMG_TAG_\d+__@@)\s+([1-9]\d?[\)\/]|\([1-9]\d?\)|[1-9]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ\$\@])',
+        r'\1\n\n\2 ',
+        text
+    )
+
+    # 5.2 Tách các ý số tiếp theo 2), 3), 4)...
+    num_pattern = re.compile(r'(?<!\n)\s*([2-9]\d?[\)\/]|\([2-9]\d?\))\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])')
+    text = num_pattern.sub(_split_num_item_repl, text)
+
+    # 6. Khôi phục lại các Tiêu đề PHẦN
+    for tok, orig in sec_map.items():
+        text = text.replace(tok, orig)
+
+    # 7. Khôi phục lại Math blocks
+    text = unmask_math_blocks(text, math_map)
+
+    # 8. Khôi phục lại Placeholders
+    text = unmask_placeholders(text, tag_map)
 
     return text
 
@@ -1443,47 +1581,52 @@ def split_into_paragraphs(text: str) -> list[str]:
 
     text = sec_pattern.sub(_mask_sec_repl, text)
 
-    # Chuẩn hóa & tách dòng trước mỗi phương án trắc nghiệm A., B., C., D.
+    # Chuẩn hóa & tách dòng trước mỗi phương án trắc nghiệm A., B., C., D. (theo ngữ cảnh đã xuất hiện A.)
     text = normalize_choice_structure(text)
-    text = re.sub(r'(?<!\n)\s*(\b[A-D]\.\s*)', r'\n\n\1', text)
+    # 🛡️ TUYỆT ĐỐI KHÔNG dùng regex \b[A-D]\. chém bừa bãi câu văn hình học (như "...hai điểm A, B. Khoảng cách...")
 
-    # TÁCH DÒNG Ý TỰ LUẬN & CÂU ĐÚNG/SAI a), b), c), d)
+    # TÁCH DÒNG Ý TỰ LUẬN & CÂU ĐÚNG/SAI a), b), c), d), e), f), g), h)...
     # - Tách ý đầu tiên a) khi đi sau dấu kết thúc câu hoặc điểm số
-    text = re.sub(r'([\.\?!:;\)]|\bđiểm\))\s+([a-d][\)\/]|\([a-d]\))\s+', r'\1\n\n\2 ', text)
+    text = re.sub(r'([\.\?!:;\)]|\bđiểm\)|@@__PLACEHOLDER_IMG_TAG_\d+__@@)\s+([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])', r'\1\n\n\2 ', text)
     # - Tách ý a) đứng độc lập nếu theo sau có b)
-    text = re.sub(r'(?<!\n)\s*([a-d][\)\/]|\([a-d]\))\s+(?=(?:(?!Câu|Bài)[\s\S])*?[b-d][\)\/])', r'\n\n\1 ', text)
+    text = re.sub(r'(?:^|(?<=\s))\s*([a-l][\)\/]|\([a-l]\)|\b[a-l]\.)\s+(?=(?:(?!Câu|Bài|PHẦN|Phần)[\s\S])*?[b-l][\)\/\.])', r'\n\n\1 ', text)
 
-    # - Tách các ý tiếp theo b) c) d) hoặc (b) (c) (d):
-    # CHỈ khớp chữ thường [b-d] (tuyệt đối không khớp (C) của đồ thị hay B-D trắc nghiệm).
+    # - Tách các ý tiếp theo b) c) d) e) f) g) h)... hoặc (b) (c) (d)...:
+    # CHỈ khớp chữ thường [b-l] (tuyệt đối không khớp (C) của đồ thị hay B-D trắc nghiệm).
     # TUYỆT ĐỐI không khớp nếu phía trước có dấu phẩy ',' (như a), b), c), d) trong câu chỉ dẫn)
     # hoặc chữ 'ý', 'các ý', 'mỗi ý', 'trong ý', 'và', 'hoặc'.
     def _split_choice_bcd_repl(m):
         full = m.group(0)
         start = m.start()
-        prefix = text[max(0, start - 25):start].lower()
-        if re.search(r'[,;:\-\+]\s*$', prefix) or re.search(r'\b(?:ý|các\s+ý|mỗi\s+ý|trong\s+ý|và|hoặc|đồ\s+thị|đường\s+cong|đường\s+tròn)\s*$', prefix):
+        prefix = text[max(0, start - 35):start].lower()
+        if re.search(r'[,;:\-\+]\s*$', prefix) or re.search(r'\b(?:ý|các\s+ý|mỗi\s+ý|trong\s+ý|và|hoặc|đồ\s+thị|đường\s+cong|đường\s+tròn|mặt\s+phẳng|điểm|hàm\s+số)\s*$', prefix):
+            return full
+        if '(' in prefix and ')' not in prefix[prefix.rfind('('):]:
             return full
         lbl = m.group(1)
         return f"\n\n{lbl} "
 
-    bcd_pattern = re.compile(r'(?<!\n)\s*([b-d][\)\/]|\([b-d]\))\s+')
+    bcd_pattern = re.compile(r'(?:^|(?<=\s))\s*([b-l][\)\/]|\([b-l]\)|\b[b-l]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])')
     text = bcd_pattern.sub(_split_choice_bcd_repl, text)
 
-    # - Tách ý đánh số 1), 2), 3) hoặc 1/, 2/, 3/ khi đi sau dấu kết thúc câu (loại trừ ';')
+    # - Tách ý đánh số 1), 2), 3) hoặc 1/, 2/, 3/ hoặc 1., 2. khi đi sau dấu kết thúc câu (loại trừ ';')
     def _split_num_item_repl(m):
         full = m.group(0)
         start = m.start()
-        prefix = text[max(0, start - 30):start]
-        # Nếu có dấu mở ngoặc '(' chưa đóng trong phạm vi 30 ký tự -> đây là tọa độ, KHÔNG TÁCH
+        prefix = text[max(0, start - 35):start].lower()
+        # Nếu có dấu mở ngoặc '(' chưa đóng trong phạm vi 35 ký tự -> đây là tọa độ, KHÔNG TÁCH
         if '(' in prefix and ')' not in prefix[prefix.rfind('('):]:
             return full
-        if re.search(r'[,;]\s*$', prefix):
+        if re.search(r'[,;:\-\+]\s*$', prefix):
             return full
-        punct = m.group(1)
-        item_lbl = m.group(2)
-        return f"{punct}\n\n{item_lbl} "
+        if re.search(r'\b(?:từ|đến|ở|trong|câu|bài|phần|ngày|tháng|năm|lớp|trang|bước|mã\s+đề|đề|thứ|khoảng|đoạn)\s*$', prefix):
+            return full
+        lbl = m.group(1)
+        return f"\n\n{lbl} "
 
-    text = re.sub(r'([\.\?!:]|\bđiểm\))\s+([1-9][\)\/])\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])', _split_num_item_repl, text)
+    text = re.sub(r'([\.\?!:;\)]|\bđiểm\)|@@__PLACEHOLDER_IMG_TAG_\d+__@@)\s+([1-9]\d?[\)\/]|\([1-9]\d?\)|[1-9]\.)\s+(?=[A-ZÀ-Ỹa-zà-ỹ\$\@])', r'\1\n\n\2 ', text)
+    num_pattern = re.compile(r'(?<!\n)\s*([2-9]\d?[\)\/]|\([2-9]\d?\))\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9\$\@])')
+    text = num_pattern.sub(_split_num_item_repl, text)
 
     # 🎯 TÁCH DÒNG ĐỘC LẬP CHO KHỐI LỜI GIẢI / HƯỚNG DẪN GIẢI / CHỌN [A-D]
     sol_block_pattern = re.compile(
@@ -1534,7 +1677,8 @@ def split_into_paragraphs(text: str) -> list[str]:
             re.match(r'^(?:[IVXLCDM]+\.|\d+\.|\b[A-Z]\.)?\s*(?:PHẦN|Phần)\s+(?:[IVXLCDM]+|\d+|[A-D]\b|TRẮC|TỰ|MỘT|HAI|THỨ)', line_str) or
             re.match(r'^(?:Câu|Bài|Đề|Ví dụ)\s+(?:\$?\d+\$?)(?:\s*\([^\)\n]*\))?\s*[\.:]', line_str) or
             re.match(r'^[A-D]\.\s*', line_str) or
-            re.match(r'^(?:[a-d][\)\/]|\([a-d]\))\s+', line_str) or
+            re.match(r'^(?:[a-l][\)\/\.]|\([a-l]\))\s+', line_str) or
+            re.match(r'^(?:[1-9]\d?[\)\/\.]|\([1-9]\d?\))\s+', line_str) or
             is_placeholder or
             is_solution_block or
             line_str.startswith('$$')
@@ -2173,6 +2317,7 @@ def export_latex_to_docx(
         latex_text = join_broken_ocr_lines(latex_text)
         latex_text = sanitize_text_aesthetics(latex_text)
         paragraphs = split_into_paragraphs(latex_text)
+        current_q_choices = set()
 
         for para_text in paragraphs:
             segments = parse_latex_content(para_text)
@@ -2290,6 +2435,7 @@ def export_latex_to_docx(
             # ── 3. Phân loại & xử lý TIÊU ĐỀ PHẦN (PHẦN 1, PHẦN I, I. PHẦN, PHẦN CÂU TRẮC NGHIỆM,...) ──
             m_sec = re.match(r'^\s*((?:[IVXLCDM]+\.|\d+\.|\b[A-Z]\.)?\s*(?:PHẦN|Phần)\b.*)$', rem_text, re.DOTALL | re.IGNORECASE)
             if m_sec:
+                current_q_choices.clear()
                 p = doc.add_paragraph()
                 p.paragraph_format.space_before = Pt(12)
                 p.paragraph_format.space_after = Pt(4)
@@ -2298,20 +2444,36 @@ def export_latex_to_docx(
                 add_text_and_math_runs(p, sec_title, bold=True, font_size=Pt(12), math_format=math_format)
                 continue
 
-            # ── 4. Phân loại & xử lý phương án trắc nghiệm A., B., C., D. hoặc ý tự luận a), b), c) / a/, b/, c/ / 1), 2) ──
-            m_choice = re.match(r'^\s*([A-D]\.|\([A-Da-d]\)|[a-d][\)\/]|\([1-9]\)|[1-9][\)\/])\s*(.*)$', rem_text, re.DOTALL)
+            # ── 4. Phân loại & xử lý phương án trắc nghiệm A., B., C., D. hoặc ý tự luận a), b), c), d), e)... / a/, b/, c/ / 1), 2) ──
+            m_choice = re.match(r'^\s*([A-D]\.|\([A-Da-l]\)|[a-l][\)\/\.]|\([1-9]\d?\)|[1-9]\d?[\)\/\.])\s*(.*)$', rem_text, re.DOTALL)
             if m_choice:
                 label_candidate = m_choice.group(1).strip()
                 body_candidate = m_choice.group(2).strip()
 
-                # Kiểm tra nếu nhãn là số 1-9 (1), 2), 3)...):
-                # Phải là mục tự luận thực sự (phía sau có nội dung văn bản/toán có nghĩa, không chỉ là dấu chấm/phẩy/ngoặc/đô la/rỗng)
                 is_valid_choice = True
-                if re.match(r'^[1-9][\)\/]$', label_candidate):
+                # 🎯 CHỈ nhận B. là phương án khi trong câu đã xuất hiện A.
+                # Tuyệt đối không chém đôi câu văn hình học (như "...hai điểm A, B. Khoảng cách...")
+                if label_candidate == 'B.':
+                    if 'A.' not in current_q_choices:
+                        is_valid_choice = False
+                elif label_candidate == 'C.':
+                    if 'B.' not in current_q_choices:
+                        is_valid_choice = False
+                elif label_candidate == 'D.':
+                    if 'C.' not in current_q_choices:
+                        is_valid_choice = False
+                elif label_candidate == 'A.':
+                    # Kiểm tra A. có phải là điểm hình học mồ côi không
+                    if not body_candidate or re.match(r'^[\.,;:\$\s\)]*$', body_candidate):
+                        is_valid_choice = False
+
+                # Kiểm tra nếu nhãn là số 1-9 hoặc dạng a-l có dấu chấm (a., 1.):
+                if re.match(r'^(?:[1-9]\d?[\)\/\.]|[a-l]\.|\([1-9]\d?\))$', label_candidate):
                     if not body_candidate or re.match(r'^[\.,;:\$\s\)]*$', body_candidate):
                         is_valid_choice = False
 
                 if is_valid_choice:
+                    current_q_choices.add(label_candidate)
                     p = doc.add_paragraph()
                     p.paragraph_format.space_before = Pt(2)
                     p.paragraph_format.space_after = Pt(2)
@@ -2326,45 +2488,45 @@ def export_latex_to_docx(
 
                     body_text = sanitize_text_aesthetics(body_candidate)
 
-                # Tự động đưa biểu thức toán học phía sau vào Equation (OMML) nếu chưa được bọc $...$
-                if not is_latex_mode and '$' not in body_text:
-                    m_dot = re.match(r'^(.*?)([\.]?)$', body_text)
-                    expr = m_dot.group(1).strip() if m_dot else body_text
-                    trailing_dot = m_dot.group(2) if m_dot else ""
-                    # Nhận diện: số đơn lẻ (0, 1, 21, -4...), tập hợp, biến số, khoảng/đoạn, phép tính
-                    is_math_expr = (
-                        bool(re.match(r'^[-+]?\d+(?:[\.,]\d+)?$', expr)) or  # Số đơn lẻ: 0, 1, 2, 5, 21, -4...
-                        bool(re.match(r'^\{[-+0-9a-zA-Z;,\s\.\\]+\}$', expr)) or  # Tập hợp: {-4; 1; 0}
-                        bool(re.match(r'^[a-zA-Z]$', expr)) or  # Ký hiệu chữ đơn lẻ: x, y, m
-                        bool(re.search(r'[=<>≤≥≠\+\-\*\/_^\\]|(?:\b[a-zA-Z]\b.*?\d)|\d+\s*[a-zA-Z]|[\(\[][-+]?\d+', expr))
-                    ) and not bool(re.search(r'\b(hàm\s+số|đồng\s+biến|nghịch\s+biến|liên\s+tục|có|không|với\s+mọi|thỏa\s+mãn|biểu\s+diễn)\b', expr, re.IGNORECASE))
-                    if is_math_expr:
-                        body_text = f"${expr}${trailing_dot}"
+                    # Tự động đưa biểu thức toán học phía sau vào Equation (OMML) nếu chưa được bọc $...$
+                    if not is_latex_mode and '$' not in body_text:
+                        m_dot = re.match(r'^(.*?)([\.]?)$', body_text)
+                        expr = m_dot.group(1).strip() if m_dot else body_text
+                        trailing_dot = m_dot.group(2) if m_dot else ""
+                        is_math_expr = (
+                            bool(re.match(r'^[-+]?\d+(?:[\.,]\d+)?$', expr)) or  # Số đơn lẻ: 0, 1, 2, 5, 21, -4...
+                            bool(re.match(r'^\{[-+0-9a-zA-Z;,\s\.\\]+\}$', expr)) or  # Tập hợp: {-4; 1; 0}
+                            bool(re.match(r'^[a-zA-Z]$', expr)) or  # Ký hiệu chữ đơn lẻ: x, y, m
+                            bool(re.search(r'[=<>≤≥≠\+\-\*\/_^\\]|(?:\b[a-zA-Z]\b.*?\d)|\d+\s*[a-zA-Z]|[\(\[][-+]?\d+', expr))
+                        ) and not bool(re.search(r'\b(hàm\s+số|đồng\s+biến|nghịch\s+biến|liên\s+tục|có|không|với\s+mọi|thỏa\s+mãn|biểu\s+diễn)\b', expr, re.IGNORECASE))
+                        if is_math_expr:
+                            body_text = f"${expr}${trailing_dot}"
 
-                body_segments = parse_latex_content(body_text)
-                for b_seg in body_segments:
-                    if b_seg['type'] == 'text_runs':
-                        for r_info in b_seg['runs']:
-                            txt = r_info['text']
-                            if not txt:
-                                continue
-                            run = p.add_run(txt)
-                            run.bold = r_info.get('bold', False)
-                    elif b_seg['type'] == 'inline_math':
-                        if is_latex_mode:
-                            p.add_run(f"${b_seg['content']}$")
-                        else:
-                            add_math_to_paragraph(p, b_seg['content'], is_display=False)
-                    elif b_seg['type'] == 'display_math':
-                        if is_latex_mode:
-                            p.add_run(f"$${b_seg['content']}$$")
-                        else:
-                            add_math_to_paragraph(p, b_seg['content'], is_display=True)
-                continue
+                    body_segments = parse_latex_content(body_text)
+                    for b_seg in body_segments:
+                        if b_seg['type'] == 'text_runs':
+                            for r_info in b_seg['runs']:
+                                txt = r_info['text']
+                                if not txt:
+                                    continue
+                                run = p.add_run(txt)
+                                run.bold = r_info.get('bold', False)
+                        elif b_seg['type'] == 'inline_math':
+                            if is_latex_mode:
+                                p.add_run(f"${b_seg['content']}$")
+                            else:
+                                add_math_to_paragraph(p, b_seg['content'], is_display=False)
+                        elif b_seg['type'] == 'display_math':
+                            if is_latex_mode:
+                                p.add_run(f"$${b_seg['content']}$$")
+                            else:
+                                add_math_to_paragraph(p, b_seg['content'], is_display=True)
+                    continue
 
             # ── 5. Phân loại & xử lý câu hỏi (Câu 1:, Câu 2., Bài 1 (1,5 điểm)...) ──
             m_question = re.match(r'^(\s*(?:Câu|Bài|Đề|Ví dụ)\s+(?:\$?\d+\$?)(?:\s*\([^\)\n]*\))?\s*[\.:]\s*)(.*)$', rem_text, re.DOTALL)
             if m_question:
+                current_q_choices.clear()
                 p = doc.add_paragraph()
                 p.paragraph_format.space_before = Pt(8)
                 p.paragraph_format.space_after = Pt(3)

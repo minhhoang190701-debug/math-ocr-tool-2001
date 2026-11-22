@@ -53,8 +53,8 @@ Bạn là chuyên gia OCR tài liệu và đề thi toán học tiếng Việt T
    - TUYỆT ĐỐI KHÔNG bọc chữ cái nhãn A., B., C., D. vào trong cặp dấu $...$ (viết 'A. $2x + 1$' thay vì '$A. 2x + 1$' hay '$A.$ $2x+1$').
    - TUYỆT ĐỐI KHÔNG bọc chung tất cả đáp án A, B, C, D trong cùng một cặp dấu $...$ hay $$...$$. Mỗi đáp án phải có cặp dấu $...$ riêng biệt.
 8. ĐỐI VỚI CÂU HỎI ĐÚNG / SAI (PHẦN II) VÀ CÂU HỎI TỰ LUẬN (PHẦN IV):
-   - BẮT BUỘC viết mỗi ý trên MỘT DÒNG RIÊNG BIỆT (xuống dòng trước a), b), c), d) hoặc a/, b/, c/, d/ hoặc 1), 2)).
-   - TUYỆT ĐỐI KHÔNG viết các ý a), b), c), d) dính liền trên cùng một hàng.
+   - BẮT BUỘC viết mỗi ý trên MỘT DÒNG RIÊNG BIỆT (xuống dòng trước các ý chữ cái: a), b), c), d), e), f), g), h)... hoặc a/, (a), a. và các ý số: 1), 2), 3), 4)... hoặc 1/, (1), 1.).
+   - TUYỆT ĐỐI KHÔNG viết các ý a), b), c), d)... hoặc 1), 2), 3)... dính liền trên cùng một hàng ngang.
    - BẮT BUỘC nhúng mọi công thức toán học và biểu thức trong từng ý vào cặp dấu $...$.
    - ĐỐI VỚI ĐIỂM SỐ TỰ LUẬN (ví dụ: 0,75 điểm, 1,0 điểm, 1,5 điểm):
      + Viết điểm số trong ngoặc đơn sau nhãn câu hỏi (ví dụ: 'Câu 1 (0,75 điểm):' hoặc 'Bài 1 (1,5 điểm):').

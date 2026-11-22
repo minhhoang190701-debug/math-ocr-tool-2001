@@ -168,8 +168,11 @@ class MTEF:
 
                 self.nodes.append(MtAST(RecordType.ENCODING_DEF, enc, None))
             else:
+                if len(self.nodes) > 0:
+                    break
                 self.Valid = False
                 print('MTEF.readRecord:FUTURE RECORD:', record)
+                break
 
         return None
 
@@ -477,6 +480,8 @@ class MTEF:
         if err is not None:
             print('MTEF.Translate.err:', err)
 
+        if latexStr:
+            return latexStr
         if self.Valid:
             return latexStr
         else:
@@ -918,6 +923,16 @@ class MTEF:
                 buf += tmplStr
 
                 # 返回数据
+                return buf, None
+            elif tmpl.selector == SelectorType.tmOBAR:
+                # Overbar (dấu gạch trên như số phức liên hợp \overline{z}, số trung bình \overline{x})
+                mainAST = ast.children[0]
+                mainSlot, _ = self.makeLatex(mainAST)
+                mainStr = ''
+                if mainSlot != "":
+                    mainStr = " {\\overline{ %s }} " % mainSlot
+                tmplStr = " %s " % mainStr
+                buf += tmplStr
                 return buf, None
             elif tmpl.selector == SelectorType.tmSUM:
                 # 读取数据 BigOpBoxClass
