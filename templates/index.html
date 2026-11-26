@@ -5,17 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📐 Math OCR Tool</title>
-    <!-- KaTeX for LaTeX rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <!-- Google Fonts for Vietnamese Typography (Be Vietnam Pro) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
-    <!-- Cropper.js -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+    <!-- KaTeX for LaTeX rendering (100% Offline Local) -->
+    <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+    <script src="/static/vendor/katex/katex.min.js"></script>
+    <script src="/static/vendor/katex/auto-render.min.js"></script>
+    <!-- Cropper.js (100% Offline Local) -->
+    <link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css">
+    <script src="/static/vendor/cropper/cropper.min.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -393,6 +389,38 @@
             position: relative;
         }
 
+        /* Mở rộng tối đa vùng nhìn & thao tác cắt ảnh cho #cropModal */
+        #cropModal .modal {
+            width: 96vw;
+            max-width: 1400px;
+            height: 93vh;
+            max-height: 93vh;
+            padding: 0.85rem 1.1rem;
+            gap: 0.45rem;
+        }
+
+        #cropModal .crop-container {
+            flex: 1 1 auto;
+            min-height: 360px;
+            height: auto;
+            max-height: none;
+        }
+
+        #cropModal .crop-select {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            min-width: 0;
+        }
+
+        #cropModal .crop-select:focus {
+            border-color: var(--primary);
+        }
+
         .modal .crop-container img {
             max-width: 100%;
             display: block;
@@ -688,6 +716,199 @@
             --pres-font-size: 24px;
         }
 
+        #presentationOverlay.pres-projector-slave .pres-top-bar,
+        #presentationOverlay.pres-projector-slave .pres-bottom-bar {
+            display: none !important;
+        }
+
+        #presentationOverlay.pres-projector-slave .pres-main-stage {
+            height: 100vh !important;
+            padding: 1.2rem 2rem !important;
+        }
+
+        #presProjectorFloatBar {
+            position: fixed;
+            top: 12px;
+            left: 16px;
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            gap: 0.45rem;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            backdrop-filter: blur(8px);
+            opacity: 0.22;
+            transition: opacity 0.25s ease;
+        }
+
+        #presProjectorFloatBar:hover {
+            opacity: 1;
+        }
+
+        /* Floating Chalk / Drawing Toolbar */
+        #presDrawToolbar {
+            position: fixed;
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99993;
+            display: none;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(10px);
+            color: #f8fafc;
+        }
+
+        #presDrawToolbar .pres-draw-sep {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.22);
+            margin: 0 2px;
+        }
+
+        .pres-color-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            padding: 0;
+        }
+
+        .pres-color-dot:hover {
+            transform: scale(1.15);
+        }
+
+        .pres-color-dot.active {
+            border-color: #ffffff;
+            transform: scale(1.18);
+            box-shadow: 0 0 0 2px #6366f1, 0 0 10px rgba(255, 255, 255, 0.55);
+        }
+
+        /* Projector Countdown Timer Badge */
+        #presTimerBadge {
+            position: fixed;
+            top: 62px;
+            right: 20px;
+            z-index: 99994;
+            display: none;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.42rem 0.95rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.88);
+            border: 2px solid rgba(56, 189, 248, 0.55);
+            color: #f8fafc;
+            font-size: 1.45rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.03em;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+            transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+        }
+
+        #presentationOverlay.pres-projector-slave #presTimerBadge {
+            top: 18px;
+            right: 22px;
+            font-size: 1.65rem;
+        }
+
+        #presTimerBadge.warn {
+            border-color: #f59e0b;
+            background: rgba(120, 53, 15, 0.92);
+            color: #fde68a;
+            box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+        }
+
+        #presTimerBadge.expired {
+            border-color: #ef4444;
+            background: rgba(127, 29, 29, 0.94);
+            color: #fecaca;
+            box-shadow: 0 0 22px rgba(239, 68, 68, 0.65);
+            animation: presTimerPulse 0.95s ease-in-out infinite;
+        }
+
+        @keyframes presTimerPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.65; transform: scale(1.04); }
+        }
+
+        /* Instant Blank Scratchpad Layer (Phím W) */
+        #presScratchpadLayer {
+            position: absolute;
+            inset: 0;
+            z-index: 99985;
+            display: none;
+            pointer-events: none;
+        }
+
+        .pres-theme-chalkboard #presScratchpadLayer {
+            background: radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%);
+            background-image:
+                radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+                radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%);
+            background-size: 32px 32px, 100% 100%;
+        }
+
+        .pres-theme-whiteboard #presScratchpadLayer {
+            background-color: #ffffff;
+            background-image: radial-gradient(rgba(15, 23, 42, 0.09) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        .pres-theme-dark #presScratchpadLayer {
+            background-color: #090d16;
+            background-image: radial-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        .pres-scratchpad-hint {
+            position: absolute;
+            bottom: 16px;
+            left: 20px;
+            padding: 0.32rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(15, 23, 42, 0.55);
+            color: rgba(248, 250, 252, 0.75);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            pointer-events: none;
+        }
+
+        .pres-theme-whiteboard .pres-scratchpad-hint {
+            background: rgba(241, 245, 249, 0.9);
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        #presTeacherHostOverlay {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000000;
+            display: none;
+            background: #0b1120;
+        }
+
+        #presTeacherIframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
         .pres-theme-chalkboard {
             background: radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%) !important;
             color: #f3f1e7 !important;
@@ -748,13 +969,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.5rem 1.2rem;
+            padding: 0.38rem 0.9rem;
             background: rgba(0, 0, 0, 0.45);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 99992;
             flex-wrap: wrap;
-            gap: 0.5rem;
+            gap: 0.35rem;
         }
 
         .pres-theme-whiteboard .pres-top-bar {
@@ -766,14 +987,14 @@
             background: rgba(255, 255, 255, 0.12);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: inherit;
-            padding: 0.35rem 0.7rem;
+            padding: 0.28rem 0.58rem;
             border-radius: 6px;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.3rem;
             transition: all 0.15s ease;
         }
 
@@ -1642,6 +1863,55 @@
                 </div>
             </div>
 
+            <!-- ⚙️ Tùy chọn định dạng trang Word (.docx) -->
+            <div id="wordFormatBar"
+                style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:1.2rem; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.75rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <span style="font-size:0.88rem; font-weight:600; color:var(--text);">⚙️ Định dạng Word:</span>
+                    <button type="button" class="btn btn-outline" id="btnPresetND30" onclick="applyWordPreset('nd30')"
+                        style="padding:0.28rem 0.65rem; font-size:0.82rem; border-color:var(--primary); color:var(--primary);">
+                        📄 Chuẩn NĐ30 (2 - 2 - 3 - 2)
+                    </button>
+                    <button type="button" class="btn btn-outline" id="btnPresetCompact" onclick="applyWordPreset('compact')"
+                        style="padding:0.28rem 0.65rem; font-size:0.82rem;">
+                        🌿 Gợi ý tiết kiệm giấy (1 - 1 - 1,5 - 1)
+                    </button>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; font-size:0.82rem; color:var(--muted);">
+                    <label style="display:inline-flex; align-items:center; gap:3px;">Trên
+                        <input type="number" id="wpMarginTop" value="2" min="0.5" max="5" step="0.1" onchange="saveWordFormatSettings()"
+                            style="width:52px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:3px;">Dưới
+                        <input type="number" id="wpMarginBottom" value="2" min="0.5" max="5" step="0.1" onchange="saveWordFormatSettings()"
+                            style="width:52px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:3px;">Trái
+                        <input type="number" id="wpMarginLeft" value="3" min="0.5" max="5" step="0.1" onchange="saveWordFormatSettings()"
+                            style="width:52px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:3px;">Phải
+                        <input type="number" id="wpMarginRight" value="2" min="0.5" max="5" step="0.1" onchange="saveWordFormatSettings()"
+                            style="width:52px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                    </label>
+                    <span style="opacity:0.4;">|</span>
+                    <label style="display:inline-flex; align-items:center; gap:4px;">Giãn dòng
+                        <select id="wpLineSpacing" onchange="saveWordFormatSettings()"
+                            style="padding:2px 6px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                            <option value="1.0">1.0 (Khít)</option>
+                            <option value="1.08">1.08 (Gọn)</option>
+                            <option value="1.15" selected>1.15 (Tối ưu)</option>
+                            <option value="1.25">1.25 (Thoáng)</option>
+                            <option value="1.5">1.5 (Rộng)</option>
+                        </select>
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:3px;">Cách đoạn (pt)
+                        <input type="number" id="wpSpaceAfter" value="3" min="0" max="12" step="1" onchange="saveWordFormatSettings()"
+                            style="width:46px; padding:2px 4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.82rem;">
+                    </label>
+                </div>
+            </div>
+
             <!-- 🖼️ Kho Hình ảnh & Bảng biến thiên đã nhận diện -->
             <div id="figuresSection"
                 style="display:none; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.2rem; margin-bottom:1.5rem;">
@@ -1671,79 +1941,98 @@
 
         <!-- ═══════════ Crop Modal ═══════════ -->
         <div class="modal-overlay" id="cropModal">
-            <div class="modal" style="max-width: 960px; width: 95%;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem;">
-                    <div>
-                        <h3 id="cropModalTitle" style="margin:0; font-size:1.15rem; color:var(--text);">✂️ Cắt lại hình
-                            ảnh</h3>
-                        <div id="cropModalSubtitle" style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
+            <div class="modal">
+                <!-- Header gọn 1 dòng -->
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.8rem; flex-shrink:0;">
+                    <div style="display:flex; align-items:baseline; gap:0.75rem; min-width:0; flex-wrap:wrap;">
+                        <h3 id="cropModalTitle" style="margin:0; font-size:1.05rem; color:var(--text); white-space:nowrap;">✂️ Cắt lại hình ảnh</h3>
+                        <div id="cropModalSubtitle" style="font-size:0.8rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             Kéo chuột trên ảnh gốc để khoanh đúng vùng cần lấy</div>
                     </div>
                     <button class="btn btn-outline" onclick="closeCropModal()"
-                        style="padding:0.25rem 0.6rem; font-size:1rem; cursor:pointer;" title="Đóng cửa sổ">✕</button>
+                        style="padding:0.2rem 0.55rem; font-size:0.95rem; cursor:pointer; flex-shrink:0;" title="Đóng cửa sổ (Esc)">✕</button>
                 </div>
 
-                <!-- Ngữ cảnh câu hỏi để nhận diện chính xác vị trí -->
+                <!-- Ngữ cảnh câu hỏi (thu gọn 1 dòng) -->
                 <div id="cropContextBanner"
-                    style="display:none; background:rgba(99,102,241,0.08); border-left:4px solid var(--primary); padding:0.5rem 0.8rem; border-radius:6px; margin-bottom:0.4rem;">
-                    <div style="font-size:0.85rem; font-weight:700; color:var(--primary); margin-bottom:2px;"
-                        id="cropContextLabel">📌 VỊ TRÍ CÂU HỎI</div>
-                    <div style="font-size:0.85rem; color:var(--text); line-height:1.4;" id="cropContextText"></div>
+                    style="display:none; align-items:center; gap:0.6rem; background:rgba(99,102,241,0.08); border-left:3px solid var(--primary); padding:0.32rem 0.7rem; border-radius:6px; flex-shrink:0; min-width:0;">
+                    <span style="font-size:0.8rem; font-weight:700; color:var(--primary); white-space:nowrap; flex-shrink:0;"
+                        id="cropContextLabel">📌 VỊ TRÍ CÂU HỎI</span>
+                    <span style="font-size:0.8rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;"
+                        id="cropContextText"></span>
                 </div>
 
-                <!-- 🛠️ Thanh công cụ Cropper: Phóng to (+), Thu nhỏ (-), Focus vùng cắt, Xem toàn trang -->
+                <!-- 🛠️ Thanh công cụ Cropper gọn 1 hàng -->
                 <div
-                    style="display:flex; justify-content:space-between; align-items:center; background:var(--surface2); padding:0.4rem 0.8rem; border-radius:8px 8px 0 0; border:1px solid var(--border); border-bottom:none; flex-wrap:wrap; gap:0.5rem;">
-                    <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
-                        <button type="button" class="btn btn-outline" style="padding:0.3rem 0.65rem; font-size:0.8rem;"
+                    style="display:flex; justify-content:space-between; align-items:center; background:var(--surface2); padding:0.35rem 0.7rem; border-radius:8px 8px 0 0; border:1px solid var(--border); border-bottom:none; flex-wrap:wrap; gap:0.4rem; flex-shrink:0;">
+                    <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-outline" style="padding:0.28rem 0.6rem; font-size:0.78rem;"
                             onclick="cropperZoomIn()" title="Phóng to ảnh (hoặc lăn con lăn chuột)">
                             🔍➕ Phóng to
                         </button>
-                        <button type="button" class="btn btn-outline" style="padding:0.3rem 0.65rem; font-size:0.8rem;"
+                        <button type="button" class="btn btn-outline" style="padding:0.28rem 0.6rem; font-size:0.78rem;"
                             onclick="cropperZoomOut()" title="Thu nhỏ ảnh (hoặc lăn con lăn chuột)">
                             🔍➖ Thu nhỏ
                         </button>
                         <button type="button" class="btn btn-primary"
-                            style="padding:0.3rem 0.75rem; font-size:0.8rem; font-weight:700;"
+                            style="padding:0.28rem 0.7rem; font-size:0.78rem; font-weight:700;"
                             onclick="cropperFocusBox()" title="Đưa tâm nhìn về lại đúng vật thể cần cắt">
                             🎯 Focus vùng cắt
                         </button>
-                        <button type="button" class="btn btn-outline" style="padding:0.3rem 0.65rem; font-size:0.8rem;"
+                        <button type="button" class="btn btn-outline" style="padding:0.28rem 0.6rem; font-size:0.78rem;"
                             onclick="cropperShowFullPage()" title="Xem toàn bộ trang ảnh">
                             📄 Xem toàn trang
                         </button>
                         <button type="button" class="btn btn-outline"
-                            style="padding:0.3rem 0.65rem; font-size:0.8rem; color:#f59e0b; border-color:#f59e0b;"
+                            style="padding:0.28rem 0.6rem; font-size:0.78rem; color:#f59e0b; border-color:#f59e0b;"
                             onclick="cropperDrawNew()" title="Kéo chuột để vẽ khung mới">
                             ✂️ Vẽ khung mới
                         </button>
                     </div>
-                    <div
-                        style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:0.4rem;">
+                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:0.5rem;">
                         <span>💡 Kéo 4 góc/cạnh để đổi cỡ • Kéo ngoài ô để lia ảnh</span>
+                        <span id="cropSourceInfo" style="color:var(--primary); font-weight:600;"></span>
                     </div>
                 </div>
 
-                <div class="crop-container"
-                    style="height: 500px; max-height: 58vh; overflow:hidden; background:#0b1120; border-radius:0 0 8px 8px; border:1px solid var(--border);">
+                <!-- Vùng cắt ảnh giãn tối đa (~70% chiều cao modal) -->
+                <div class="crop-container" style="margin-top:-0.45rem;">
                     <img id="cropImage" src="">
                 </div>
-                <div id="cropCaptionRow" style="margin-top:0.4rem; display:none; align-items:center; gap:0.6rem;">
-                    <label style="font-size:0.85rem; color:var(--text-muted); font-weight:600; white-space:nowrap;">Chú
-                        thích ảnh:</label>
+
+                <!-- 📍 Tùy chỉnh vị trí gắn ảnh: Chọn Câu & Chọn Dòng -->
+                <div id="cropPlacementRow"
+                    style="display:none; align-items:center; gap:0.55rem; flex-wrap:wrap; flex-shrink:0; background:rgba(99,102,241,0.06); border:1px solid var(--border); padding:0.4rem 0.65rem; border-radius:6px;">
+                    <label style="font-size:0.82rem; color:var(--primary); font-weight:700; white-space:nowrap;">📍 Gắn vào:</label>
+                    <select id="cropTargetQuestion" class="crop-select" style="flex:1 1 240px;"
+                        onchange="onCropQuestionChange()" title="Chọn câu hỏi sẽ chứa hình ảnh này"></select>
+                    <label style="font-size:0.82rem; color:var(--text-muted); font-weight:600; white-space:nowrap;">Vị trí dòng:</label>
+                    <select id="cropTargetLine" class="crop-select" style="flex:1.4 1 300px;"
+                        title="Chọn dòng mà hình ảnh sẽ được chèn ngay phía sau"></select>
+                </div>
+
+                <!-- Chú thích ảnh -->
+                <div id="cropCaptionRow" style="display:none; align-items:center; gap:0.6rem; flex-shrink:0;">
+                    <label style="font-size:0.82rem; color:var(--text-muted); font-weight:600; white-space:nowrap;">Chú thích ảnh:</label>
                     <input type="text" id="cropCaptionInput" placeholder="Ví dụ: Đồ thị hàm số, Bảng biến thiên..."
-                        style="flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:0.45rem 0.7rem; border-radius:6px; font-size:0.9rem; outline:none;">
+                        style="flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:0.38rem 0.65rem; border-radius:6px; font-size:0.86rem; outline:none;">
                 </div>
-                <div
-                    style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem; display:flex; justify-content:space-between; align-items:center;">
-                    <span>💡 Kéo các góc để điều chỉnh vùng cắt. Nhấn "Lưu vùng cắt" để cập nhật trực tiếp vào file
-                        Word.</span>
-                    <span id="cropSourceInfo" style="color:var(--primary); font-weight:600;"></span>
-                </div>
-                <div class="modal-actions" style="margin-top:0.5rem;">
-                    <button class="btn btn-outline" onclick="closeCropModal()">Đóng</button>
-                    <button class="btn btn-warning" onclick="resetCrop()">↺ Đặt lại</button>
-                    <button class="btn btn-success" id="btnApplyCrop" onclick="applyCrop()">💾 Lưu vùng cắt</button>
+
+                <!-- Thanh hành động đáy -->
+                <div class="modal-actions" style="justify-content:space-between; align-items:center; flex-shrink:0; margin-top:0.1rem;">
+                    <div>
+                        <button type="button" class="btn btn-danger" id="btnRemoveCropImage"
+                            style="display:none; padding:0.45rem 0.85rem; font-size:0.85rem;"
+                            onclick="removeCurrentCropImage()"
+                            title="Xóa bỏ hình ảnh này khỏi câu hỏi, Kho ảnh, file Word và Slide">
+                            🗑️ Bỏ ảnh này
+                        </button>
+                    </div>
+                    <div style="display:flex; gap:0.6rem; align-items:center;">
+                        <button class="btn btn-outline" onclick="closeCropModal()">Đóng</button>
+                        <button class="btn btn-warning" onclick="resetCrop()">↺ Đặt lại</button>
+                        <button class="btn btn-success" id="btnApplyCrop" onclick="applyCrop()">💾 Lưu vùng cắt</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1757,8 +2046,46 @@
             <span>[ ĐÃ TẮT MÀN HÌNH — Bấm phím B hoặc click chuột để bật lại ]</span>
         </div>
 
+        <!-- Thanh nổi tối giản cho Cửa sổ Máy chiếu (HDMI Extend) -->
+        <div id="presProjectorFloatBar">
+            <span style="font-size:0.78rem; color:#94a3b8; font-weight:600; padding:0 4px;">🖥️ Màn hình Máy chiếu</span>
+            <button type="button" class="pres-tool-btn" onclick="togglePresFullscreen()" style="padding:0.25rem 0.6rem; font-size:0.78rem;">
+                ⛶ Toàn màn hình (F11)
+            </button>
+            <button type="button" class="pres-tool-btn" onclick="window.close()" style="padding:0.25rem 0.55rem; font-size:0.78rem; color:#fca5a5;">
+                ✕ Đóng
+            </button>
+        </div>
+
+        <!-- Instant Blank Scratchpad Layer (Phím W) -->
+        <div id="presScratchpadLayer">
+            <div class="pres-scratchpad-hint">📝 Bảng nháp trống — Bấm phím W để quay lại câu hỏi</div>
+        </div>
+
         <!-- Drawing Canvas -->
         <canvas id="presCanvasOverlay"></canvas>
+
+        <!-- Floating Chalk / Drawing Toolbar -->
+        <div id="presDrawToolbar" onclick="event.stopPropagation()">
+            <button type="button" id="btnPresModePen" class="pres-tool-btn active" onclick="setPresDrawMode('pen')" title="Bút phấn thường">✏️ Phấn</button>
+            <button type="button" id="btnPresModeHighlight" class="pres-tool-btn" onclick="setPresDrawMode('highlighter')" title="Bút dạ quang Highlight (trong suốt)">🖍️ Highlight</button>
+            <button type="button" id="btnPresModeEraser" class="pres-tool-btn" onclick="setPresDrawMode('eraser')" title="Tẩy cục bộ">🧽 Tẩy</button>
+            <div class="pres-draw-sep"></div>
+            <button type="button" class="pres-color-dot" data-color="#ffffff" style="background:#ffffff;" onclick="setPresDrawColor('#ffffff')" title="Phấn Trắng"></button>
+            <button type="button" class="pres-color-dot active" data-color="#facc15" style="background:#facc15;" onclick="setPresDrawColor('#facc15')" title="Phấn Vàng"></button>
+            <button type="button" class="pres-color-dot" data-color="#ef4444" style="background:#ef4444;" onclick="setPresDrawColor('#ef4444')" title="Phấn Đỏ"></button>
+            <button type="button" class="pres-color-dot" data-color="#38bdf8" style="background:#38bdf8;" onclick="setPresDrawColor('#38bdf8')" title="Phấn Xanh dương"></button>
+            <button type="button" class="pres-color-dot" data-color="#4ade80" style="background:#4ade80;" onclick="setPresDrawColor('#4ade80')" title="Phấn Xanh lá"></button>
+            <div class="pres-draw-sep"></div>
+            <button type="button" class="pres-tool-btn" onclick="undoPresDrawing()" title="Hoàn tác nét vẽ cuối (Ctrl+Z)">↩️ Hoàn tác</button>
+            <button type="button" class="pres-tool-btn" onclick="clearPresDrawing()" title="Xóa toàn bộ nét vẽ">🗑️ Xóa hết</button>
+        </div>
+
+        <!-- Projector Countdown Timer Badge -->
+        <div id="presTimerBadge">
+            <span>⏱️</span>
+            <span id="presTimerBadgeText">01:00</span>
+        </div>
 
         <!-- Virtual Laser Dot -->
         <div id="presLaserDot"></div>
@@ -1880,12 +2207,18 @@
 
                 <!-- Drawing Pen -->
                 <button class="pres-tool-btn" onclick="togglePresDrawing()" id="btnPresDrawing"
-                    title="Bật/Tắt bút vẽ bảng (Phím P)">
+                    title="Bật/Tắt bút vẽ bảng phấn đa năng (Phím P)">
                     ✏️ Bút vẽ
                 </button>
                 <button class="pres-tool-btn" onclick="clearPresDrawing()" id="btnPresClearDraw" style="display:none;"
                     title="Xóa toàn bộ nét vẽ">
                     🗑️ Xóa nét
+                </button>
+
+                <!-- Instant Blank Scratchpad -->
+                <button class="pres-tool-btn" onclick="togglePresScratchpad()" id="btnPresScratchpad"
+                    title="Bật/Tắt Bảng nháp trống tức thì (Phím W)">
+                    📝 Bảng nháp
                 </button>
 
                 <!-- Virtual Laser -->
@@ -1904,6 +2237,13 @@
                     style="background:#8b5cf6; border-color:#8b5cf6; color:#fff;"
                     title="Tải file HTML tự chạy không cần mạng">
                     💾 Tải Slide Offline
+                </button>
+
+                <!-- Dual Screen Presenter Mode (HDMI Extend) -->
+                <button class="pres-tool-btn" onclick="launchDualScreenPresentation()" id="btnPresDualScreen"
+                    style="background:rgba(14,165,233,0.2); border-color:rgba(56,189,248,0.6); color:#38bdf8; font-weight:700;"
+                    title="Chế độ 2 màn hình HDMI (Tab Laptop cho Giáo viên + Cửa sổ Máy chiếu cho Học sinh)">
+                    🖥️ 2 Màn hình (HDMI)
                 </button>
 
                 <!-- Fullscreen -->
@@ -2389,8 +2729,254 @@
         let cropTargetImageName = null;
         let cropTargetBox = null;
         let cropTargetDesc = null;
+        let cropPlacementBlocks = [];
+        let cropOriginalPlacement = null; // { pageIdx, blockId, insertAfterLineIdx, tagLineIdx }
         let galleryFigures = [];
         let pageTokensMap = {};
+
+        function buildCropTargetTagRegex(imageName, desc) {
+            if (imageName) {
+                const escapedImg = imageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return new RegExp(`\\[(?:HÌNH[ _]VẼ|HÌNH|ĐỒ[ _]THỊ|BẢNG(?:[ _]BIẾN[ _]THIÊN)?|IMAGE|FIGURE|TABLE):[^\\]]*image=${escapedImg}[^\\]]*\\]`, 'gi');
+            }
+            if (desc) {
+                const escapedDesc = desc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return new RegExp(`\\[(?:HÌNH[ _]VẼ|HÌNH|ĐỒ[ _]THỊ|BẢNG(?:[ _]BIẾN[ _]THIÊN)?|IMAGE|FIGURE|TABLE):[^\\]]*${escapedDesc}[^\\]]*\\]`, 'i');
+            }
+            return null;
+        }
+
+        function cleanLinePreviewForSelect(rawLine, maxLen = 58) {
+            if (!rawLine) return '';
+            let t = rawLine
+                .replace(/\[(?:HÌNH[ _]VẼ|HÌNH|ĐỒ[ _]THỊ|BẢNG(?:[ _]BIẾN[ _]THIÊN)?|IMAGE|FIGURE|TABLE):[^\]]*\]/gi, '[Hình/Bảng]')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (t.length > maxLen) t = t.slice(0, maxLen) + '…';
+            return t;
+        }
+
+        function populateCropPlacementControls(sourcePageIdx, existingImageName = null, existingDesc = null) {
+            const row = document.getElementById('cropPlacementRow');
+            const qSelect = document.getElementById('cropTargetQuestion');
+            const lSelect = document.getElementById('cropTargetLine');
+            if (!row || !qSelect || !lSelect) return;
+
+            cropPlacementBlocks = [];
+            cropOriginalPlacement = null;
+
+            if (!Array.isArray(ocrResults) || ocrResults.length === 0) {
+                row.style.display = 'none';
+                return;
+            }
+
+            const targetTagRegex = buildCropTargetTagRegex(existingImageName, existingDesc);
+            const qStartRegex = /^\s*((?:Câu|Bài|Đề|Ví dụ)\s+\d+)\s*[\.:]?/i;
+
+            let matchedBlockId = null;
+            let matchedInsertAfter = null;
+            let matchedTagLineIdx = -1;
+
+            ocrResults.forEach((res, pIdx) => {
+                const lines = (res.latex || '').split('\n');
+                let tagLineIdxOnPage = -1;
+                if (pIdx === sourcePageIdx && targetTagRegex) {
+                    for (let i = 0; i < lines.length; i++) {
+                        targetTagRegex.lastIndex = 0;
+                        if (targetTagRegex.test(lines[i])) {
+                            tagLineIdxOnPage = i;
+                            break;
+                        }
+                    }
+                }
+
+                // Tìm các mốc bắt đầu câu hỏi trên trang
+                const starts = [];
+                for (let i = 0; i < lines.length; i++) {
+                    const m = lines[i].match(qStartRegex);
+                    if (m) {
+                        starts.push({ lineIdx: i, cleanLabel: m[1].replace(/\s+/g, ' ').trim() });
+                    }
+                }
+
+                const pageBlocks = [];
+                const firstQLine = starts.length > 0 ? starts[0].lineIdx : lines.length;
+
+                // Nếu có nội dung trước câu đầu tiên (hoặc cả trang không có tiêu đề Câu X)
+                if (firstQLine > 0) {
+                    let hasText = false;
+                    for (let i = 0; i < firstQLine; i++) {
+                        if (lines[i].trim() !== '' && i !== tagLineIdxOnPage) {
+                            hasText = true;
+                            break;
+                        }
+                    }
+                    if (hasText || starts.length === 0 || (tagLineIdxOnPage >= 0 && tagLineIdxOnPage < firstQLine)) {
+                        pageBlocks.push({
+                            startLine: 0,
+                            endLine: firstQLine - 1,
+                            cleanLabel: `Đầu trang ${res.page}`,
+                            isQuestion: false
+                        });
+                    }
+                }
+
+                for (let s = 0; s < starts.length; s++) {
+                    const st = starts[s];
+                    const endL = (s + 1 < starts.length) ? (starts[s + 1].lineIdx - 1) : (lines.length - 1);
+                    pageBlocks.push({
+                        startLine: st.lineIdx,
+                        endLine: endL,
+                        cleanLabel: st.cleanLabel,
+                        isQuestion: true
+                    });
+                }
+
+                pageBlocks.forEach((blk, bIdx) => {
+                    const blockId = `${pIdx}_${bIdx}`;
+                    const contentLines = [];
+                    for (let i = blk.startLine; i <= blk.endLine; i++) {
+                        if (i === tagLineIdxOnPage) continue;
+                        if (lines[i].trim() === '') continue;
+                        contentLines.push({
+                            lineIdx: i,
+                            textPreview: cleanLinePreviewForSelect(lines[i], 62)
+                        });
+                    }
+
+                    const snippetSource = contentLines.length > 0 ? contentLines[0].textPreview : '(Trống)';
+                    const displayOption = blk.isQuestion
+                        ? `Trang ${res.page} — ${blk.cleanLabel}: ${cleanLinePreviewForSelect(snippetSource.replace(qStartRegex, '').trim() || snippetSource, 38)}`
+                        : `Trang ${res.page} — ${blk.cleanLabel}${snippetSource !== '(Trống)' ? ': ' + cleanLinePreviewForSelect(snippetSource, 32) : ''}`;
+
+                    cropPlacementBlocks.push({
+                        id: blockId,
+                        pageIdx: pIdx,
+                        pageNum: res.page,
+                        cleanLabel: blk.cleanLabel,
+                        isQuestion: blk.isQuestion,
+                        startLine: blk.startLine,
+                        endLine: blk.endLine,
+                        contentLines,
+                        displayOption
+                    });
+
+                    if (pIdx === sourcePageIdx && tagLineIdxOnPage >= blk.startLine && tagLineIdxOnPage <= blk.endLine) {
+                        matchedBlockId = blockId;
+                        matchedTagLineIdx = tagLineIdxOnPage;
+                        // Tìm dòng nội dung gần nhất nằm phía trước tagLineIdxOnPage
+                        let prevLineVal = 'START';
+                        for (let c = 0; c < contentLines.length; c++) {
+                            if (contentLines[c].lineIdx < tagLineIdxOnPage) {
+                                prevLineVal = String(contentLines[c].lineIdx);
+                            } else {
+                                break;
+                            }
+                        }
+                        matchedInsertAfter = prevLineVal;
+                    }
+                });
+            });
+
+            if (cropPlacementBlocks.length === 0) {
+                row.style.display = 'none';
+                return;
+            }
+
+            qSelect.innerHTML = cropPlacementBlocks
+                .map(b => `<option value="${b.id}">${escapeHtml(b.displayOption)}</option>`)
+                .join('');
+
+            // Chọn sẵn câu hiện tại (hoặc câu đầu tiên của trang sourcePageIdx nếu thêm mới)
+            let defaultBlockId = matchedBlockId;
+            if (!defaultBlockId) {
+                const firstOnPage = cropPlacementBlocks.find(b => b.pageIdx === sourcePageIdx && b.isQuestion)
+                    || cropPlacementBlocks.find(b => b.pageIdx === sourcePageIdx)
+                    || cropPlacementBlocks[0];
+                defaultBlockId = firstOnPage.id;
+            }
+            qSelect.value = defaultBlockId;
+
+            if (matchedBlockId !== null) {
+                cropOriginalPlacement = {
+                    pageIdx: sourcePageIdx,
+                    blockId: matchedBlockId,
+                    insertAfterLineIdx: matchedInsertAfter,
+                    tagLineIdx: matchedTagLineIdx
+                };
+            }
+
+            onCropQuestionChange(matchedInsertAfter);
+            row.style.display = 'flex';
+        }
+
+        function onCropQuestionChange(preferredLineVal = null) {
+            const qSelect = document.getElementById('cropTargetQuestion');
+            const lSelect = document.getElementById('cropTargetLine');
+            if (!qSelect || !lSelect) return;
+
+            const block = cropPlacementBlocks.find(b => b.id === qSelect.value);
+            if (!block) {
+                lSelect.innerHTML = '';
+                return;
+            }
+
+            const opts = [];
+            opts.push(`<option value="START">⬆️ Đầu ${block.isQuestion ? block.cleanLabel : 'khối'} (trên cùng)</option>`);
+            block.contentLines.forEach((item, idx) => {
+                opts.push(`<option value="${item.lineIdx}">↳ Sau dòng ${idx + 1}: "${escapeHtml(item.textPreview)}"</option>`);
+            });
+            lSelect.innerHTML = opts.join('');
+
+            if (preferredLineVal !== null && Array.from(lSelect.options).some(o => o.value === String(preferredLineVal))) {
+                lSelect.value = String(preferredLineVal);
+            } else if (block.contentLines.length > 0) {
+                // Mặc định chọn ngay sau dòng 1 (lời dẫn câu hỏi)
+                lSelect.value = String(block.contentLines[0].lineIdx);
+            } else {
+                lSelect.value = 'START';
+            }
+        }
+
+        function removeCurrentCropImage() {
+            if (!confirm('Bạn có chắc muốn bỏ hình ảnh này khỏi câu hỏi và file Word?')) return;
+
+            if (cropMode === 'slide_page' || cropMode === 'slide_direct') {
+                const curSlide = presSlides[currentPresIndex];
+                if (curSlide) {
+                    curSlide.imageData = null;
+                    if (curSlide.questionText) {
+                        curSlide.questionText = curSlide.questionText.replace(/\n*___PRES_IMAGE___\n*/g, '\n').trim();
+                    }
+                }
+                if (cropMode === 'slide_page' && cropTargetResultIndex !== null && ocrResults[cropTargetResultIndex]) {
+                    const regex = buildCropTargetTagRegex(cropTargetImageName, cropTargetDesc);
+                    if (regex) {
+                        ocrResults[cropTargetResultIndex].latex = (ocrResults[cropTargetResultIndex].latex || '')
+                            .replace(regex, '')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim();
+                    }
+                }
+                closeCropModal();
+                renderCurrentPresSlide();
+                showToast('🗑️ Đã bỏ hình ảnh khỏi slide!');
+                return;
+            }
+
+            if (cropMode === 'step3' && cropTargetResultIndex !== null && ocrResults[cropTargetResultIndex]) {
+                let currentLatex = ocrResults[cropTargetResultIndex].latex || '';
+                const regex = buildCropTargetTagRegex(cropTargetImageName, cropTargetDesc);
+                if (regex && regex.test(currentLatex)) {
+                    regex.lastIndex = 0;
+                    currentLatex = currentLatex.replace(regex, '').replace(/\n{3,}/g, '\n\n').trim();
+                    ocrResults[cropTargetResultIndex].latex = currentLatex;
+                }
+                closeCropModal();
+                renderResults();
+                showToast('🗑️ Đã bỏ hình ảnh khỏi câu hỏi và file Word!');
+            }
+        }
 
         function cleanFigureDesc(raw) {
             if (!raw) return '';
@@ -2632,6 +3218,11 @@
             document.getElementById('btnApplyCrop').textContent = '✅ Cắt & Thêm ảnh mới';
             document.getElementById('cropCaptionRow').style.display = 'none';
 
+            const placementRow = document.getElementById('cropPlacementRow');
+            if (placementRow) placementRow.style.display = 'none';
+            const btnRemove = document.getElementById('btnRemoveCropImage');
+            if (btnRemove) btnRemove.style.display = 'none';
+
             const banner = document.getElementById('cropContextBanner');
             if (banner) banner.style.display = 'none';
 
@@ -2662,13 +3253,22 @@
             const banner = document.getElementById('cropContextBanner');
             if (banner) {
                 if (questionLabel || contextSnippet || cropTargetDesc) {
-                    banner.style.display = 'block';
+                    banner.style.display = 'flex';
                     document.getElementById('cropContextLabel').textContent = `📌 ${questionLabel || 'CÂU HỎI'} • TRANG ${r.page}`;
-                    document.getElementById('cropContextText').textContent = contextSnippet ? `${contextSnippet}... (${cropTargetDesc || ''})` : (cropTargetDesc || '');
+                    const ctxStr = contextSnippet ? `${contextSnippet}... (${cropTargetDesc || ''})` : (cropTargetDesc || '');
+                    const ctxEl = document.getElementById('cropContextText');
+                    ctxEl.textContent = ctxStr;
+                    ctxEl.title = ctxStr;
                 } else {
                     banner.style.display = 'none';
                 }
             }
+
+            // Nạp danh sách Câu & Dòng để người dùng có thể chỉnh lại vị trí gắn ảnh
+            populateCropPlacementControls(resultIdx, existingImageName, cropTargetDesc);
+
+            const btnRemove = document.getElementById('btnRemoveCropImage');
+            if (btnRemove) btnRemove.style.display = (existingImageName || cropTargetDesc) ? 'inline-flex' : 'none';
 
             document.getElementById('cropCaptionRow').style.display = 'flex';
             document.getElementById('cropCaptionInput').value = cropTargetDesc || '';
@@ -2697,6 +3297,12 @@
 
             const banner = document.getElementById('cropContextBanner');
             if (banner) banner.style.display = 'none';
+
+            // Cho phép chọn ngay Câu & Dòng muốn chèn ảnh mới vào
+            populateCropPlacementControls(resultIdx, null, null);
+
+            const btnRemove = document.getElementById('btnRemoveCropImage');
+            if (btnRemove) btnRemove.style.display = 'none';
 
             document.getElementById('cropCaptionRow').style.display = 'flex';
             document.getElementById('cropCaptionInput').value = 'Hình vẽ minh họa';
@@ -2814,7 +3420,6 @@
                     renderImageGrid();
                     showToast('✅ Đã thêm ảnh cắt mới vào danh sách!');
                 } else if (cropMode === 'step3' || cropMode === 'step3_new') {
-                    let currentLatex = ocrResults[cropTargetResultIndex].latex || "";
                     const captionInput = document.getElementById('cropCaptionInput').value.trim();
                     const desc = cleanFigureDesc(captionInput || cropTargetDesc || "Hình vẽ minh họa");
 
@@ -2825,38 +3430,134 @@
                     const xmax = Math.round(((safeX + safeW) / nw) * 1000);
                     const boxStr = ` | box=[${ymin}, ${xmin}, ${ymax}, ${xmax}]`;
 
+                    const qSelect = document.getElementById('cropTargetQuestion');
+                    const lSelect = document.getElementById('cropTargetLine');
+                    const selectedBlockId = qSelect ? qSelect.value : null;
+                    const selectedLineVal = lSelect ? lSelect.value : null;
+                    const destBlock = selectedBlockId ? cropPlacementBlocks.find(b => b.id === selectedBlockId) : null;
+
                     const tagType = /bảng/i.test(desc) ? "BẢNG" : "HÌNH_VẼ";
-                    const newTag = `[${tagType}: image=${result.filename}${boxStr} | ${desc}]`;
+                    const qMeta = (destBlock && destBlock.isQuestion) ? `question="${destBlock.cleanLabel}" | ` : '';
+                    const newTag = `[${tagType}: ${qMeta}image=${result.filename}${boxStr} | ${desc}]`;
 
-                    if (cropTargetImageName) {
-                        // Thay thế thẻ cũ chứa image này
-                        const escapedImg = cropTargetImageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(`\\[(?:HÌNH[ _]VẼ|HÌNH|ĐỒ[ _]THỊ|BẢNG(?:[ _]BIẾN[ _]THIÊN)?|IMAGE|FIGURE|TABLE):[^\\]]*image=${escapedImg}[^\\]]*\\]`, 'gi');
-                        if (regex.test(currentLatex)) {
-                            currentLatex = currentLatex.replace(regex, newTag);
+                    const isUnchangedPosition = (
+                        cropMode === 'step3' &&
+                        cropOriginalPlacement &&
+                        destBlock &&
+                        selectedBlockId === cropOriginalPlacement.blockId &&
+                        String(selectedLineVal) === String(cropOriginalPlacement.insertAfterLineIdx)
+                    );
+
+                    let movedMessage = '';
+
+                    if (cropMode === 'step3' && (!destBlock || isUnchangedPosition)) {
+                        // Giữ nguyên vị trí cũ: thay thế trực tiếp tại chỗ
+                        let currentLatex = ocrResults[cropTargetResultIndex].latex || "";
+                        const targetRegex = buildCropTargetTagRegex(cropTargetImageName, cropTargetDesc);
+                        if (targetRegex && targetRegex.test(currentLatex)) {
+                            targetRegex.lastIndex = 0;
+                            currentLatex = currentLatex.replace(targetRegex, newTag);
                         } else {
                             currentLatex += `\n\n${newTag}\n\n`;
                         }
-                    } else if (cropTargetDesc) {
-                        // Thay thế thẻ placeholder khớp mô tả
-                        const escapedDesc = cropTargetDesc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const placeholderRegex = new RegExp(`\\[(?:HÌNH[ _]VẼ|HÌNH|ĐỒ[ _]THỊ|BẢNG(?:[ _]BIẾN[ _]THIÊN)?|IMAGE|FIGURE|TABLE):[^\\]]*${escapedDesc}[^\\]]*\\]`, 'i');
-                        if (placeholderRegex.test(currentLatex)) {
-                            currentLatex = currentLatex.replace(placeholderRegex, newTag);
+                        ocrResults[cropTargetResultIndex].latex = currentLatex;
+                    } else if (destBlock) {
+                        // Di chuyển thẻ sang Câu/Dòng mới hoặc chèn ảnh mới vào đúng Câu/Dòng đã chọn
+                        const destPageIdx = destBlock.pageIdx;
+                        const targetRegex = (cropMode === 'step3')
+                            ? buildCropTargetTagRegex(cropTargetImageName, cropTargetDesc)
+                            : null;
+
+                        if (cropMode === 'step3' && destPageIdx === cropTargetResultIndex) {
+                            // Cùng một trang: vừa gỡ thẻ cũ vừa chèn thẻ mới trong 1 lượt để không lệch chỉ số dòng
+                            const lines = (ocrResults[destPageIdx].latex || '').split('\n');
+                            const tagLineIdx = cropOriginalPlacement ? cropOriginalPlacement.tagLineIdx : -1;
+                            const targetLineIdx = selectedLineVal === 'START' ? -1 : parseInt(selectedLineVal, 10);
+                            const newLines = [];
+                            let inserted = false;
+
+                            for (let i = 0; i < lines.length; i++) {
+                                if (selectedLineVal === 'START' && i === destBlock.startLine && !inserted) {
+                                    newLines.push('');
+                                    newLines.push(newTag);
+                                    newLines.push('');
+                                    inserted = true;
+                                }
+
+                                let curLine = lines[i];
+                                if (i === tagLineIdx && targetRegex) {
+                                    targetRegex.lastIndex = 0;
+                                    curLine = curLine.replace(targetRegex, '');
+                                    if (curLine.trim() !== '') {
+                                        newLines.push(curLine);
+                                    }
+                                } else {
+                                    newLines.push(curLine);
+                                }
+
+                                if (selectedLineVal !== 'START' && i === targetLineIdx && !inserted) {
+                                    newLines.push('');
+                                    newLines.push(newTag);
+                                    newLines.push('');
+                                    inserted = true;
+                                }
+                            }
+                            if (!inserted) {
+                                newLines.push('');
+                                newLines.push(newTag);
+                                newLines.push('');
+                            }
+                            ocrResults[destPageIdx].latex = newLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
                         } else {
-                            currentLatex += `\n\n${newTag}\n\n`;
+                            // Khác trang (hoặc thêm ảnh mới step3_new):
+                            if (cropMode === 'step3' && targetRegex && ocrResults[cropTargetResultIndex]) {
+                                targetRegex.lastIndex = 0;
+                                ocrResults[cropTargetResultIndex].latex = (ocrResults[cropTargetResultIndex].latex || '')
+                                    .replace(targetRegex, '')
+                                    .replace(/\n{3,}/g, '\n\n')
+                                    .trim();
+                            }
+
+                            const destLines = (ocrResults[destPageIdx].latex || '').split('\n');
+                            const targetLineIdx = selectedLineVal === 'START' ? -1 : parseInt(selectedLineVal, 10);
+                            const newDestLines = [];
+                            let inserted = false;
+
+                            for (let i = 0; i < destLines.length; i++) {
+                                if (selectedLineVal === 'START' && i === destBlock.startLine && !inserted) {
+                                    newDestLines.push('');
+                                    newDestLines.push(newTag);
+                                    newDestLines.push('');
+                                    inserted = true;
+                                }
+                                newDestLines.push(destLines[i]);
+                                if (selectedLineVal !== 'START' && i === targetLineIdx && !inserted) {
+                                    newDestLines.push('');
+                                    newDestLines.push(newTag);
+                                    newDestLines.push('');
+                                    inserted = true;
+                                }
+                            }
+                            if (!inserted) {
+                                newDestLines.push('');
+                                newDestLines.push(newTag);
+                                newDestLines.push('');
+                            }
+                            ocrResults[destPageIdx].latex = newDestLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
                         }
+
+                        movedMessage = ` (Đã gắn vào ${destBlock.cleanLabel} — Trang ${destBlock.pageNum})`;
                     } else {
-                        // Chèn thêm ảnh mới vào cuối văn bản
+                        // Fallback nếu không có danh sách câu hỏi
+                        let currentLatex = ocrResults[cropTargetResultIndex].latex || "";
                         currentLatex += `\n\n${newTag}\n\n`;
+                        ocrResults[cropTargetResultIndex].latex = currentLatex;
                     }
-
-                    ocrResults[cropTargetResultIndex].latex = currentLatex;
 
                     closeCropModal();
                     renderResults();
 
-                    showToast('✅ Đã cập nhật ảnh cắt! Sẽ tự động nhúng vào file Word.');
+                    showToast(`✅ Đã cập nhật ảnh cắt!${movedMessage} Sẽ tự động nhúng vào file Word.`);
                 }
             } catch (err) {
                 alert('Lỗi cắt ảnh: ' + err.message);
@@ -3443,6 +4144,12 @@
             formData.append('title', isLatex ? 'De_thi_Toan_LaTeX' : 'Tai_lieu_Toan_hoc');
             formData.append('pages_json', JSON.stringify(pagesData));
             formData.append('math_format', mathFormat);
+            formData.append('margin_top', document.getElementById('wpMarginTop')?.value || '2');
+            formData.append('margin_bottom', document.getElementById('wpMarginBottom')?.value || '2');
+            formData.append('margin_left', document.getElementById('wpMarginLeft')?.value || '3');
+            formData.append('margin_right', document.getElementById('wpMarginRight')?.value || '2');
+            formData.append('line_spacing', document.getElementById('wpLineSpacing')?.value || '1.15');
+            formData.append('space_after', document.getElementById('wpSpaceAfter')?.value || '3');
             if (sessionId) formData.append('session_id', sessionId);
 
             try {
@@ -3475,6 +4182,67 @@
                 }
             }
         }
+
+        function applyWordPreset(preset) {
+            const presets = {
+                nd30: { top: 2, bottom: 2, left: 3, right: 2, spacing: '1.15', after: 3 },
+                compact: { top: 1, bottom: 1, left: 1.5, right: 1, spacing: '1.15', after: 0 }
+            };
+            const p = presets[preset] || presets.nd30;
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+            setVal('wpMarginTop', p.top);
+            setVal('wpMarginBottom', p.bottom);
+            setVal('wpMarginLeft', p.left);
+            setVal('wpMarginRight', p.right);
+            setVal('wpLineSpacing', p.spacing);
+            setVal('wpSpaceAfter', p.after);
+            updateWordPresetHighlight(preset);
+            saveWordFormatSettings();
+        }
+
+        function updateWordPresetHighlight(activePreset) {
+            const btnND30 = document.getElementById('btnPresetND30');
+            const btnCompact = document.getElementById('btnPresetCompact');
+            if (btnND30) {
+                btnND30.style.borderColor = (activePreset === 'nd30') ? 'var(--primary)' : '';
+                btnND30.style.color = (activePreset === 'nd30') ? 'var(--primary)' : '';
+            }
+            if (btnCompact) {
+                btnCompact.style.borderColor = (activePreset === 'compact') ? 'var(--primary)' : '';
+                btnCompact.style.color = (activePreset === 'compact') ? 'var(--primary)' : '';
+            }
+        }
+
+        function saveWordFormatSettings() {
+            const cfg = {
+                top: document.getElementById('wpMarginTop')?.value || '2',
+                bottom: document.getElementById('wpMarginBottom')?.value || '2',
+                left: document.getElementById('wpMarginLeft')?.value || '3',
+                right: document.getElementById('wpMarginRight')?.value || '2',
+                spacing: document.getElementById('wpLineSpacing')?.value || '1.15',
+                after: document.getElementById('wpSpaceAfter')?.value || '3'
+            };
+            try { localStorage.setItem('wordExportSettings', JSON.stringify(cfg)); } catch (e) {}
+            const isND30 = (Number(cfg.top) === 2 && Number(cfg.bottom) === 2 && Number(cfg.left) === 3 && Number(cfg.right) === 2);
+            const isCompact = (Number(cfg.top) === 1 && Number(cfg.bottom) === 1 && Number(cfg.left) === 1.5 && Number(cfg.right) === 1);
+            updateWordPresetHighlight(isND30 ? 'nd30' : (isCompact ? 'compact' : 'custom'));
+        }
+
+        (function loadWordFormatSettings() {
+            try {
+                const raw = localStorage.getItem('wordExportSettings');
+                if (!raw) return;
+                const cfg = JSON.parse(raw);
+                const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+                setVal('wpMarginTop', cfg.top);
+                setVal('wpMarginBottom', cfg.bottom);
+                setVal('wpMarginLeft', cfg.left);
+                setVal('wpMarginRight', cfg.right);
+                setVal('wpLineSpacing', cfg.spacing);
+                setVal('wpSpaceAfter', cfg.after);
+                saveWordFormatSettings();
+            } catch (e) {}
+        })();
 
         function downloadLatexExamText() {
             const validResults = ocrResults.filter(r => r.latex && r.latex.trim());
@@ -3872,6 +4640,13 @@
         let isDrawingMouse = false;
         let drawLastX = 0;
         let drawLastY = 0;
+        let presDrawColor = '#facc15';
+        let presDrawMode = 'pen'; // 'pen' | 'highlighter' | 'eraser'
+        let presDrawStrokes = [];
+        let presScratchpadStrokes = [];
+        let presCurrentStroke = null;
+        let isPresScratchpadActive = false;
+        let presCanvasInitialized = false;
 
         function maskSlideMediaTags(text) {
             if (!text) return { text: '', tokens: {} };
@@ -4025,6 +4800,38 @@
         }
 
         // ═══════════ XỬ LÝ & RENDER BẢNG SỐ LIỆU GHÉP NHÓM (MARKDOWN TABLE) ═══════════
+        function isMarkdownTable(rows) {
+            if (!rows || rows.length < 2) return false;
+            let hasSeparator = false;
+            let separatorIdx = -1;
+            const parsedRows = rows.map((r, idx) => {
+                let clean = r.trim().replace(/^\|/, '').replace(/\|$/, '');
+                let cells = clean.split('|').map(c => c.trim());
+                const isSep = cells.length >= 2 && cells.every(c => /^:?-{2,}:?$/.test(c));
+                if (isSep) {
+                    hasSeparator = true;
+                    separatorIdx = idx;
+                }
+                return { cells, isSep };
+            });
+            // 1. Có dòng phân cách Markdown chuẩn (|---|---| hoặc |:---|:---|)
+            if (hasSeparator && separatorIdx > 0 && parsedRows.length >= 2) {
+                return true;
+            }
+            // 2. Không có separator nhưng tất cả các hàng đều bọc trong cặp |...| và có cùng số cột (>= 2 cột)
+            const allWrappedInPipes = rows.every(r => {
+                const t = r.trim();
+                return t.startsWith('|') && t.endsWith('|') && (t.match(/\|/g) || []).length >= 3;
+            });
+            if (allWrappedInPipes && rows.length >= 2) {
+                const colCount = parsedRows[0].cells.length;
+                if (colCount >= 2 && parsedRows.every(r => r.cells.length === colCount)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         function buildHtmlTableFromMarkdownRows(rows) {
             if (!rows || rows.length === 0) return '';
 
@@ -4099,8 +4906,23 @@
             if (!text) return '';
             text = normalizeInputText(text);
 
-            // 1. Tự động sửa lỗi dính hàng của bảng: | | -> |\n|
-            let processed = text.replace(/\|\s*\|\s*/g, '|\n|');
+            // 🛡️ BƯỚC 1: KHÓA KÉT SẮT TOÀN BỘ CÔNG THỨC TOÁN HỌC ($$..$$, $..$, \[..\], \(..\))
+            // Tuyệt đối bảo vệ các ký hiệu toán học có dấu gạch đứng:
+            // Độ dài vectơ |\vec{u}|, trị tuyệt đối |x|, định thức ma trận, xác suất P(A|B)...
+            const mathTokens = [];
+            let maskedText = text.replace(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]+?\\\))/g, (m) => {
+                const tok = `___PRES_MATH_TOK_${mathTokens.length}___`;
+                mathTokens.push(m);
+                return tok;
+            });
+
+            const unmaskMath = (str) => {
+                if (!str || !mathTokens.length) return str || '';
+                return str.replace(/___PRES_MATH_TOK_(\d+)___/g, (_, idx) => mathTokens[parseInt(idx, 10)] || '');
+            };
+
+            // 1. Tự động sửa lỗi dính hàng của bảng bên ngoài công thức toán: | | -> |\n|
+            let processed = maskedText.replace(/\|\s*\|\s*/g, '|\n|');
 
             // 2. Tách các dòng và bóc tách nếu text câu hỏi bị dính liền với bảng
             const rawLines = processed.split('\n');
@@ -4109,15 +4931,19 @@
                 const trimmed = l.trim();
                 if (!trimmed) return;
                 const firstPipe = trimmed.indexOf('|');
-                const pipeCount = (trimmed.match(/\|/g) || []).length;
-                if (firstPipe > 0 && pipeCount >= 2) {
+                if (firstPipe > 0) {
                     const textBefore = trimmed.substring(0, firstPipe).trim();
                     const tableRow = trimmed.substring(firstPipe).trim();
-                    if (textBefore) lines.push(textBefore);
-                    if (tableRow) lines.push(tableRow);
-                } else {
-                    lines.push(trimmed);
+                    // CHỈ tách thành tableRow khi phần sau thực sự có dạng hàng bảng Markdown:
+                    // Bắt đầu bằng |, kết thúc bằng |, và có >= 3 dấu | (ít nhất 2 cột)
+                    const pipeCount = (tableRow.match(/\|/g) || []).length;
+                    if (tableRow.startsWith('|') && tableRow.endsWith('|') && pipeCount >= 3) {
+                        if (textBefore) lines.push(textBefore);
+                        lines.push(tableRow);
+                        return;
+                    }
                 }
+                lines.push(trimmed);
             });
 
             // 3. Gom cụm bảng Markdown và render
@@ -4126,24 +4952,32 @@
 
             const flushTable = () => {
                 if (tableBuffer.length === 0) return;
-                const validRows = tableBuffer.filter(r => (r.match(/\|/g) || []).length >= 2);
-                if (validRows.length >= 1) {
-                    outputParts.push(buildHtmlTableFromMarkdownRows(validRows));
+                // BẮT BUỘC kiểm tra tính hợp lệ của bảng: Phải có ít nhất 2 hàng, có separator hoặc đồng nhất số cột >= 2
+                if (isMarkdownTable(tableBuffer)) {
+                    // Mở két toán bên trong từng ô bảng trước khi dựng HTML
+                    const unmaskedRows = tableBuffer.map(r => unmaskMath(r));
+                    outputParts.push(buildHtmlTableFromMarkdownRows(unmaskedRows));
                 } else {
-                    tableBuffer.forEach(l => outputParts.push(richPresMath(l)));
+                    // Nếu không phải bảng thực sự, trả về dòng văn bản bình thường và render KaTeX 100%
+                    tableBuffer.forEach(l => outputParts.push(richPresMath(unmaskMath(l))));
                 }
                 tableBuffer = [];
             };
 
             lines.forEach(line => {
                 const trimmed = line.trim();
-                if (trimmed.startsWith('|') && (trimmed.match(/\|/g) || []).length >= 2) {
+                // Một dòng chỉ có thể là ứng viên bảng nếu bắt đầu và kết thúc bằng |, hoặc là dòng phân cách |:---|:---|
+                const isSeparatorCandidate = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(trimmed);
+                const isTableRowCandidate = trimmed.startsWith('|') && trimmed.endsWith('|') && (trimmed.match(/\|/g) || []).length >= 3;
+
+                if (isSeparatorCandidate || isTableRowCandidate) {
                     tableBuffer.push(trimmed);
                 } else {
                     flushTable();
                     if (trimmed) {
+                        const unmaskedLine = unmaskMath(trimmed);
                         // Nhận diện nếu dòng là một ý con (Đúng/Sai a-h hoặc Tự luận 1-9)
-                        const subMatch = trimmed.match(/^([a-l][\)\/\.]|\([a-l]\)|[1-9]\d?[\)\/\.]|\([1-9]\d?\))\s+(.*)$/i);
+                        const subMatch = unmaskedLine.match(/^([a-l][\)\/\.]|\([a-l]\)|[1-9]\d?[\)\/\.]|\([1-9]\d?\))\s+(.*)$/i);
                         if (subMatch) {
                             const lbl = subMatch[1].trim();
                             const subBody = subMatch[2].trim();
@@ -4155,7 +4989,7 @@
                             `;
                             outputParts.push(subHtml);
                         } else {
-                            outputParts.push(richPresMath(trimmed));
+                            outputParts.push(richPresMath(unmaskedLine));
                         }
                     }
                 }
@@ -4471,9 +5305,14 @@
             overlay.style.display = 'none';
             document.body.style.overflow = '';
 
-            // Thoát laser và vẽ nếu đang bật
+            // Thoát laser, bảng nháp và vẽ nếu đang bật
             if (isLaserActive) togglePresLaser();
+            if (isPresScratchpadActive) togglePresScratchpad(false);
             if (isDrawingActive) togglePresDrawing();
+
+            // Ẩn badge đếm ngược nếu đang hiện
+            const timerBadge = document.getElementById('presTimerBadge');
+            if (timerBadge) timerBadge.style.display = 'none';
 
             // Tắt blackout nếu đang bật
             document.getElementById('presBlackoutScreen').style.display = 'none';
@@ -4938,10 +5777,17 @@
 
                 const banner = document.getElementById('cropContextBanner');
                 if (banner) {
-                    banner.style.display = 'block';
+                    banner.style.display = 'flex';
                     document.getElementById('cropContextLabel').textContent = `📌 ${slide.title} • TRANG ${ocrResults[foundResultIdx].page}`;
-                    document.getElementById('cropContextText').textContent = slide.questionText.slice(0, 120);
+                    const ctxTextEl = document.getElementById('cropContextText');
+                    ctxTextEl.textContent = slide.questionText.slice(0, 120);
+                    ctxTextEl.title = slide.questionText.slice(0, 250);
                 }
+
+                const placementRow = document.getElementById('cropPlacementRow');
+                if (placementRow) placementRow.style.display = 'none';
+                const btnRemove = document.getElementById('btnRemoveCropImage');
+                if (btnRemove) btnRemove.style.display = 'inline-flex';
 
                 document.getElementById('cropCaptionRow').style.display = 'flex';
                 document.getElementById('cropCaptionInput').value = slide.imageData.desc || '';
@@ -4968,6 +5814,11 @@
 
                 const banner = document.getElementById('cropContextBanner');
                 if (banner) banner.style.display = 'none';
+
+                const placementRow = document.getElementById('cropPlacementRow');
+                if (placementRow) placementRow.style.display = 'none';
+                const btnRemove = document.getElementById('btnRemoveCropImage');
+                if (btnRemove) btnRemove.style.display = 'inline-flex';
 
                 document.getElementById('cropCaptionRow').style.display = 'flex';
                 document.getElementById('cropCaptionInput').value = slide.imageData.desc || '';
@@ -5396,47 +6247,182 @@
             }
         }
 
-        // ═══════════ Whiteboard Canvas Drawing ═══════════
+        // ═══════════ Whiteboard Canvas Drawing (Stroke Stack + Multi-Tool) ═══════════
+        function getActivePresStrokeStack() {
+            return isPresScratchpadActive ? presScratchpadStrokes : presDrawStrokes;
+        }
+
+        function getPresStrokeWidth(mode) {
+            if (mode === 'highlighter') return 20;
+            if (mode === 'eraser') return 26;
+            return 3.5;
+        }
+
+        function renderStrokeOnPresCtx(ctx, canvas, stroke) {
+            if (!ctx || !canvas || !stroke || !stroke.points || stroke.points.length === 0) return;
+            const w = canvas.width;
+            const h = canvas.height;
+            const mode = stroke.mode || 'pen';
+            const color = stroke.color || '#facc15';
+            const lineWidth = stroke.width || getPresStrokeWidth(mode);
+
+            ctx.save();
+            ctx.beginPath();
+            const p0 = stroke.points[0];
+            ctx.moveTo(p0[0] * w, p0[1] * h);
+            if (stroke.points.length === 1) {
+                ctx.lineTo(p0[0] * w + 0.1, p0[1] * h + 0.1);
+            } else {
+                for (let i = 1; i < stroke.points.length; i++) {
+                    ctx.lineTo(stroke.points[i][0] * w, stroke.points[i][1] * h);
+                }
+            }
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = lineWidth;
+
+            if (mode === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = 'rgba(0,0,0,1)';
+                ctx.shadowBlur = 0;
+            } else if (mode === 'highlighter') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = color;
+                ctx.shadowBlur = 0;
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 3;
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function redrawPresCanvas() {
+            if (!presCanvas || !presCtx) return;
+            presCtx.clearRect(0, 0, presCanvas.width, presCanvas.height);
+            const stack = getActivePresStrokeStack();
+            for (let i = 0; i < stack.length; i++) {
+                renderStrokeOnPresCtx(presCtx, presCanvas, stack[i]);
+            }
+        }
+
+        function setPresDrawColor(color) {
+            presDrawColor = color;
+            if (presDrawMode === 'eraser') {
+                setPresDrawMode('pen');
+            }
+            document.querySelectorAll('#presDrawToolbar .pres-color-dot').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === color);
+            });
+        }
+
+        function setPresDrawMode(mode) {
+            presDrawMode = mode;
+            const btnPen = document.getElementById('btnPresModePen');
+            const btnHi = document.getElementById('btnPresModeHighlight');
+            const btnEr = document.getElementById('btnPresModeEraser');
+            if (btnPen) btnPen.classList.toggle('active', mode === 'pen');
+            if (btnHi) btnHi.classList.toggle('active', mode === 'highlighter');
+            if (btnEr) btnEr.classList.toggle('active', mode === 'eraser');
+        }
+
+        function undoPresDrawing(fromRemote = false) {
+            const stack = getActivePresStrokeStack();
+            if (stack.length === 0) return;
+            stack.pop();
+            redrawPresCanvas();
+            if (!fromRemote && presBroadcast && !isRemoteSyncApplying) {
+                presBroadcast.postMessage({ type: 'CMD_UNDO_DRAW', payload: {} });
+            }
+        }
+
         function initPresCanvas() {
             presCanvas = document.getElementById('presCanvasOverlay');
             if (!presCanvas) return;
             presCanvas.width = window.innerWidth;
             presCanvas.height = window.innerHeight;
             presCtx = presCanvas.getContext('2d');
+            redrawPresCanvas();
+
+            if (presCanvasInitialized) return;
+            presCanvasInitialized = true;
 
             window.addEventListener('resize', () => {
                 if (presCanvas) {
                     presCanvas.width = window.innerWidth;
                     presCanvas.height = window.innerHeight;
+                    redrawPresCanvas();
                 }
             });
 
-            presCanvas.addEventListener('mousedown', (e) => {
-                if (!isDrawingActive) return;
+            const getNormPt = (e) => {
+                const rect = presCanvas.getBoundingClientRect();
+                const cx = e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
+                const cy = e.touches && e.touches.length ? e.touches[0].clientY : e.clientY;
+                return {
+                    nx: Math.max(0, Math.min(1, (cx - rect.left) / (rect.width || 1))),
+                    ny: Math.max(0, Math.min(1, (cy - rect.top) / (rect.height || 1))),
+                };
+            };
+
+            const onPointerStart = (e) => {
+                if (!isDrawingActive || !presCtx) return;
+                if (e.cancelable) e.preventDefault();
                 isDrawingMouse = true;
-                drawLastX = e.clientX;
-                drawLastY = e.clientY;
-            });
+                const { nx, ny } = getNormPt(e);
+                drawLastX = nx;
+                drawLastY = ny;
+                const width = getPresStrokeWidth(presDrawMode);
+                presCurrentStroke = {
+                    id: 'local_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+                    points: [[nx, ny]],
+                    color: presDrawColor,
+                    width: width,
+                    mode: presDrawMode,
+                };
+                getActivePresStrokeStack().push(presCurrentStroke);
+                if (presDrawMode === 'highlighter') {
+                    redrawPresCanvas();
+                } else {
+                    renderStrokeOnPresCtx(presCtx, presCanvas, presCurrentStroke);
+                }
+            };
 
-            presCanvas.addEventListener('mousemove', (e) => {
-                if (!isDrawingActive || !isDrawingMouse || !presCtx) return;
-                presCtx.beginPath();
-                presCtx.moveTo(drawLastX, drawLastY);
-                presCtx.lineTo(e.clientX, e.clientY);
-                presCtx.strokeStyle = '#facc15'; // Màu vàng phấn rực rỡ
-                presCtx.lineWidth = 3.5;
-                presCtx.lineCap = 'round';
-                presCtx.lineJoin = 'round';
-                presCtx.shadowColor = '#facc15';
-                presCtx.shadowBlur = 4;
-                presCtx.stroke();
-                drawLastX = e.clientX;
-                drawLastY = e.clientY;
-            });
+            const onPointerMove = (e) => {
+                if (!isDrawingActive || !isDrawingMouse || !presCtx || !presCurrentStroke) return;
+                if (e.cancelable) e.preventDefault();
+                const { nx, ny } = getNormPt(e);
+                presCurrentStroke.points.push([nx, ny]);
+                if (presCurrentStroke.mode === 'highlighter') {
+                    redrawPresCanvas();
+                } else {
+                    renderStrokeOnPresCtx(presCtx, presCanvas, {
+                        points: [[drawLastX, drawLastY], [nx, ny]],
+                        color: presCurrentStroke.color,
+                        width: presCurrentStroke.width,
+                        mode: presCurrentStroke.mode,
+                    });
+                }
+                drawLastX = nx;
+                drawLastY = ny;
+            };
 
-            document.addEventListener('mouseup', () => {
+            const onPointerEnd = () => {
                 isDrawingMouse = false;
-            });
+                presCurrentStroke = null;
+            };
+
+            presCanvas.addEventListener('mousedown', onPointerStart);
+            presCanvas.addEventListener('mousemove', onPointerMove);
+            document.addEventListener('mouseup', onPointerEnd);
+            presCanvas.addEventListener('touchstart', onPointerStart, { passive: false });
+            presCanvas.addEventListener('touchmove', onPointerMove, { passive: false });
+            document.addEventListener('touchend', onPointerEnd);
         }
 
         function togglePresDrawing() {
@@ -5444,22 +6430,65 @@
             const canvas = document.getElementById('presCanvasOverlay');
             const btnDraw = document.getElementById('btnPresDrawing');
             const btnClear = document.getElementById('btnPresClearDraw');
+            const drawBar = document.getElementById('presDrawToolbar');
 
             if (isDrawingActive) {
                 canvas.classList.add('drawing-active');
-                btnDraw.classList.add('active');
-                btnClear.style.display = 'inline-flex';
+                if (btnDraw) btnDraw.classList.add('active');
+                if (btnClear) btnClear.style.display = 'inline-flex';
+                if (drawBar && !isProjectorSlave) drawBar.style.display = 'flex';
             } else {
                 canvas.classList.remove('drawing-active');
-                btnDraw.classList.remove('active');
-                btnClear.style.display = 'none';
+                if (btnDraw) btnDraw.classList.remove('active');
+                if (btnClear) btnClear.style.display = 'none';
+                if (drawBar) drawBar.style.display = 'none';
             }
         }
 
         function clearPresDrawing() {
+            if (isPresScratchpadActive) {
+                presScratchpadStrokes = [];
+            } else {
+                presDrawStrokes = [];
+            }
             if (presCanvas && presCtx) {
                 presCtx.clearRect(0, 0, presCanvas.width, presCanvas.height);
             }
+        }
+
+        // ═══════════ Instant Blank Scratchpad (Phím W) ═══════════
+        function togglePresScratchpad(forceState) {
+            const nextState = typeof forceState === 'boolean' ? forceState : !isPresScratchpadActive;
+            isPresScratchpadActive = nextState;
+            const layer = document.getElementById('presScratchpadLayer');
+            const btn = document.getElementById('btnPresScratchpad');
+            if (layer) layer.style.display = isPresScratchpadActive ? 'block' : 'none';
+            if (btn) btn.classList.toggle('active', isPresScratchpadActive);
+
+            // Khi mở bảng nháp ở chế độ 1 màn hình, tự bật bút vẽ để viết ngay
+            if (isPresScratchpadActive && !isProjectorSlave && !isDrawingActive) {
+                togglePresDrawing();
+            }
+            redrawPresCanvas();
+        }
+
+        // ═══════════ Projector Countdown Timer Badge ═══════════
+        function applyPresTimerSync(payload) {
+            const badge = document.getElementById('presTimerBadge');
+            const textEl = document.getElementById('presTimerBadgeText');
+            if (!badge || !textEl) return;
+            if (!payload || !payload.visible) {
+                badge.style.display = 'none';
+                return;
+            }
+            const sec = Math.max(0, Number(payload.secondsLeft) || 0);
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            badge.classList.remove('warn', 'expired');
+            if (sec === 0) badge.classList.add('expired');
+            else if (sec <= 10) badge.classList.add('warn');
+            badge.style.display = 'inline-flex';
         }
 
         // ═══════════ Keyboard Shortcuts ═══════════
@@ -5483,6 +6512,13 @@
 
             // Nếu đang gõ text vào input thì bỏ qua
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            // Hoàn tác nét vẽ bảng phấn (Ctrl+Z / Cmd+Z)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+                e.preventDefault();
+                undoPresDrawing();
+                return;
+            }
 
             switch (e.key) {
                 case 'ArrowRight':
@@ -5535,6 +6571,11 @@
                 case 'p':
                 case 'P':
                     togglePresDrawing();
+                    break;
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    togglePresScratchpad();
                     break;
                 case 'f':
                 case 'F':
@@ -6140,6 +7181,394 @@ $\int (2x + \sin x) dx = x^2 - \cos x + C$. Chọn B.`;
             renderCurrentPresSlide();
             closeInlineQuickEditor();
             showToast(`✏️ Đã lưu và cập nhật ${slide.title || 'Slide'} tức thì!`);
+        }
+
+        // ═══════════════════════════════════════════
+        // DUAL-SCREEN PRESENTER VIEW (BROADCAST CHANNEL)
+        // ═══════════════════════════════════════════
+        const _urlParams = new URLSearchParams(window.location.search);
+        const isProjectorSlave = _urlParams.get('mode') === 'projector';
+        let dualChannelId = _urlParams.get('channel') || '';
+        let presBroadcast = null;
+        let projectorWinRef = null;
+        let isRemoteSyncApplying = false;
+
+        function ensureDualChannel(chId) {
+            if (!chId) {
+                chId = 'ch_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+            }
+            if (presBroadcast && dualChannelId === chId) return presBroadcast;
+            if (presBroadcast) presBroadcast.close();
+            dualChannelId = chId;
+            presBroadcast = new BroadcastChannel('math_slide_sync_' + dualChannelId);
+            presBroadcast.onmessage = handleDualChannelMessage;
+            return presBroadcast;
+        }
+
+        function broadcastFullState() {
+            if (!presBroadcast || isProjectorSlave) return;
+            const docTitleEl = document.getElementById('presDocTitle');
+            const blackoutEl = document.getElementById('presBlackoutScreen');
+            presBroadcast.postMessage({
+                type: 'SYNC_FULL_STATE',
+                payload: {
+                    slides: presSlides,
+                    currentIndex: currentPresIndex,
+                    sessionId: typeof sessionId !== 'undefined' ? sessionId : '',
+                    docTitle: docTitleEl ? docTitleEl.textContent : 'Đề thi Toán học',
+                    themeIndex: presThemeIndex,
+                    isSolutionVisible: isSolutionVisible,
+                    isBlackout: blackoutEl ? blackoutEl.style.display === 'flex' : false,
+                    splitLayout: presSplitLayout,
+                    choiceLayout: presChoiceLayout,
+                }
+            });
+        }
+
+        function applyRemoteThemeAndLayout(payload) {
+            const overlay = document.getElementById('presentationOverlay');
+            if (!overlay) return;
+            if (typeof payload.themeIndex === 'number') {
+                presThemes.forEach(cls => overlay.classList.remove(cls));
+                presThemeIndex = payload.themeIndex % presThemes.length;
+                overlay.classList.add(presThemes[presThemeIndex]);
+            }
+            if (typeof payload.splitLayout === 'boolean') {
+                presSplitLayout = payload.splitLayout;
+            }
+            if (payload.choiceLayout) {
+                presChoiceLayout = payload.choiceLayout;
+            }
+            renderCurrentPresSlide();
+        }
+
+        function drawNormalizedStrokeOnProjector(payload) {
+            if (!presCanvas || !presCtx || !payload) return;
+            const stack = getActivePresStrokeStack();
+            const mode = payload.mode || 'pen';
+            const color = payload.color || '#facc15';
+            const width = payload.width || getPresStrokeWidth(mode);
+            const strokeId = payload.strokeId || null;
+            const phase = payload.phase || 'move';
+
+            if (phase === 'start') {
+                const nx = typeof payload.nx === 'number' ? payload.nx : payload.x1;
+                const ny = typeof payload.ny === 'number' ? payload.ny : payload.y1;
+                if (typeof nx !== 'number' || typeof ny !== 'number') return;
+                const st = { id: strokeId, points: [[nx, ny]], color, width, mode };
+                stack.push(st);
+                if (mode === 'highlighter') {
+                    redrawPresCanvas();
+                } else {
+                    renderStrokeOnPresCtx(presCtx, presCanvas, st);
+                }
+                return;
+            }
+
+            if (phase === 'end') {
+                return;
+            }
+
+            // phase === 'move' (hỗ trợ cả streaming theo strokeId lẫn định dạng x1,y1,x2,y2 cũ)
+            let st = strokeId ? stack.find(s => s.id === strokeId) : null;
+            const x2 = typeof payload.x2 === 'number' ? payload.x2 : payload.nx;
+            const y2 = typeof payload.y2 === 'number' ? payload.y2 : payload.ny;
+            if (typeof x2 !== 'number' || typeof y2 !== 'number') return;
+
+            if (!st) {
+                const pts = (typeof payload.x1 === 'number' && typeof payload.y1 === 'number')
+                    ? [[payload.x1, payload.y1], [x2, y2]]
+                    : [[x2, y2]];
+                st = { id: strokeId, points: pts, color, width, mode };
+                stack.push(st);
+            } else {
+                st.points.push([x2, y2]);
+            }
+
+            if (mode === 'highlighter') {
+                redrawPresCanvas();
+            } else {
+                const segPts = st.points.length >= 2
+                    ? [st.points[st.points.length - 2], st.points[st.points.length - 1]]
+                    : st.points;
+                renderStrokeOnPresCtx(presCtx, presCanvas, { points: segPts, color, width, mode });
+            }
+        }
+
+        function handleDualChannelMessage(event) {
+            const { type, payload } = event.data || {};
+            if (!type) return;
+
+            if (type === 'SYNC_HANDSHAKE_REQ' && !isProjectorSlave) {
+                broadcastFullState();
+                return;
+            }
+
+            if (!isProjectorSlave) {
+                // Tab gốc (Teacher Host) nhận cập nhật từ presenter.html khi giáo viên thao tác
+                isRemoteSyncApplying = true;
+                try {
+                    if (type === 'CMD_GOTO_SLIDE' && typeof payload.index === 'number') {
+                        currentPresIndex = payload.index;
+                        renderCurrentPresSlide();
+                    } else if (type === 'CMD_TOGGLE_SOLUTION') {
+                        if (Boolean(payload.visible) !== isSolutionVisible) togglePresSolution();
+                    } else if (type === 'CMD_UPDATE_SLIDE_DATA' && presSlides[payload.index]) {
+                        Object.assign(presSlides[payload.index], payload.slidePatch || {});
+                        renderCurrentPresSlide();
+                    } else if (type === 'CMD_BLACKOUT') {
+                        const screen = document.getElementById('presBlackoutScreen');
+                        if (screen) screen.style.display = payload.active ? 'flex' : 'none';
+                    } else if (type === 'CMD_THEME_LAYOUT') {
+                        applyRemoteThemeAndLayout(payload || {});
+                    }
+                } finally {
+                    isRemoteSyncApplying = false;
+                }
+                return;
+            }
+
+            // Tab Máy chiếu (Projector Slave) nhận lệnh từ Giáo viên
+            isRemoteSyncApplying = true;
+            try {
+                if (type === 'SYNC_FULL_STATE') {
+                    presSlides = payload.slides || [];
+                    currentPresIndex = payload.currentIndex || 0;
+                    if (payload.sessionId) sessionId = payload.sessionId;
+                    const overlay = document.getElementById('presentationOverlay');
+                    overlay.style.display = 'flex';
+                    overlay.classList.add('pres-projector-slave');
+                    document.body.style.overflow = 'hidden';
+                    initPresCanvas();
+                    applyRemoteThemeAndLayout(payload);
+                    if (payload.isSolutionVisible && !isSolutionVisible) {
+                        togglePresSolution();
+                    }
+                    const screen = document.getElementById('presBlackoutScreen');
+                    if (screen) screen.style.display = payload.isBlackout ? 'flex' : 'none';
+                } else if (type === 'CMD_GOTO_SLIDE' && typeof payload.index === 'number') {
+                    currentPresIndex = payload.index;
+                    renderCurrentPresSlide();
+                } else if (type === 'CMD_TOGGLE_SOLUTION') {
+                    if (Boolean(payload.visible) !== isSolutionVisible) togglePresSolution();
+                } else if (type === 'CMD_UPDATE_SLIDE_DATA' && presSlides[payload.index]) {
+                    Object.assign(presSlides[payload.index], payload.slidePatch || {});
+                    const wasVisible = isSolutionVisible;
+                    renderCurrentPresSlide();
+                    if (wasVisible && !isSolutionVisible) togglePresSolution();
+                } else if (type === 'CMD_BLACKOUT') {
+                    const screen = document.getElementById('presBlackoutScreen');
+                    if (screen) screen.style.display = payload.active ? 'flex' : 'none';
+                } else if (type === 'CMD_THEME_LAYOUT') {
+                    applyRemoteThemeAndLayout(payload || {});
+                } else if (type === 'CMD_ZOOM_IMAGE') {
+                    const imgEl = document.getElementById('presSlideImg');
+                    if (imgEl) {
+                        if (payload.action === 'toggle') {
+                            toggleSlideImageZoom(imgEl);
+                        } else if (payload.action === 'open') {
+                            if (!imgEl.classList.contains('zoomed-pop')) toggleSlideImageZoom(imgEl);
+                        } else if (payload.action === 'close') {
+                            closeSlideImageZoom();
+                        }
+                    }
+                } else if (type === 'CMD_LASER') {
+                    if (payload.action === 'toggle') {
+                        togglePresLaser();
+                    } else if (payload.action === 'move') {
+                        const dot = document.getElementById('presLaserDot');
+                        if (dot && isLaserActive) {
+                            dot.style.left = (payload.nx * window.innerWidth) + 'px';
+                            dot.style.top = (payload.ny * window.innerHeight) + 'px';
+                        }
+                    }
+                } else if (type === 'CMD_DRAW_STROKE') {
+                    drawNormalizedStrokeOnProjector(payload || {});
+                } else if (type === 'CMD_UNDO_DRAW') {
+                    undoPresDrawing(true);
+                } else if (type === 'CMD_CLEAR_DRAW') {
+                    clearPresDrawing();
+                } else if (type === 'CMD_TIMER_SYNC') {
+                    applyPresTimerSync(payload || {});
+                } else if (type === 'CMD_SCRATCHPAD') {
+                    togglePresScratchpad(Boolean(payload && payload.active));
+                } else if (type === 'CMD_FONT_SIZE') {
+                    if (payload && payload.action === 'reset') {
+                        resetPresFontSize();
+                    } else if (payload && typeof payload.delta === 'number') {
+                        changePresFontSize(payload.delta);
+                    }
+                    if (presBroadcast) {
+                        presBroadcast.postMessage({
+                            type: 'SYNC_FONT_SIZE',
+                            payload: { fontSize: presFontSize, isAuto: !presCustomFontSizeManual }
+                        });
+                    }
+                } else if (type === 'CMD_FULLSCREEN') {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                    } else {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                } else if (type === 'CMD_CLOSE_PROJECTOR') {
+                    window.close();
+                }
+            } finally {
+                isRemoteSyncApplying = false;
+            }
+        }
+
+        async function openProjectorWindow() {
+            const url = `/?mode=projector&channel=${encodeURIComponent(dualChannelId)}`;
+            let features = 'popup=yes,width=1280,height=720,menubar=no,toolbar=no,location=no,status=no';
+
+            // Tự động nhận diện màn hình HDMI Extend (Window Management API của Chrome/Edge)
+            let extScreen = null;
+            if ('getScreenDetails' in window) {
+                try {
+                    const details = await window.getScreenDetails();
+                    extScreen = details.screens.find(s => s !== details.currentScreen) || null;
+                    if (extScreen) {
+                        features = `popup=yes,left=${extScreen.availLeft},top=${extScreen.availTop},width=${extScreen.availWidth},height=${extScreen.availHeight},menubar=no,toolbar=no,location=no,status=no`;
+                    }
+                } catch {}
+            }
+
+            // Fallback nếu không có quyền getScreenDetails nhưng Windows đang mở rộng 2 màn hình
+            if (!extScreen && window.screen && window.screen.availWidth) {
+                const isExt = Boolean(window.screen.isExtended);
+                const guessLeft = isExt
+                    ? (window.screen.availLeft !== undefined && window.screen.availLeft !== 0 ? window.screen.availLeft : window.screen.width)
+                    : 60;
+                features = `popup=yes,left=${guessLeft},top=0,width=${window.screen.availWidth || 1280},height=${window.screen.availHeight || 720},menubar=no,toolbar=no,location=no,status=no`;
+            }
+
+            projectorWinRef = window.open(url, 'MathProjectorView_' + dualChannelId, features);
+            if (!projectorWinRef) {
+                alert('Trình duyệt đã chặn cửa sổ bật lên (Popup). Vui lòng cho phép Popup để mở màn hình Máy chiếu!');
+                return false;
+            }
+
+            // Nếu đã phát hiện Màn 2: ép vị trí + kích thước phủ kín Màn 2 và thử tự động Fullscreen
+            if (extScreen) {
+                try {
+                    projectorWinRef.moveTo(extScreen.availLeft, extScreen.availTop);
+                    projectorWinRef.resizeTo(extScreen.availWidth, extScreen.availHeight);
+                } catch {}
+                const tryAutoFs = () => {
+                    try {
+                        if (projectorWinRef && !projectorWinRef.closed && projectorWinRef.document && projectorWinRef.document.documentElement) {
+                            const req = projectorWinRef.document.documentElement.requestFullscreen;
+                            if (typeof req === 'function') {
+                                req.call(projectorWinRef.document.documentElement, { screen: extScreen }).catch(() => {});
+                            }
+                        }
+                    } catch {}
+                };
+                projectorWinRef.addEventListener('load', tryAutoFs, { once: true });
+                setTimeout(tryAutoFs, 600);
+            }
+
+            // Đưa con trỏ focus ngay lại Tab Laptop để Giáo viên điều khiển lập tức
+            window.focus();
+            return true;
+        }
+
+        async function moveProjectorToSecondScreen() {
+            if (!projectorWinRef || projectorWinRef.closed) {
+                return await openProjectorWindow();
+            }
+            if ('getScreenDetails' in window) {
+                try {
+                    const details = await window.getScreenDetails();
+                    const extScreen = details.screens.find(s => s !== details.currentScreen);
+                    if (extScreen) {
+                        projectorWinRef.moveTo(extScreen.availLeft, extScreen.availTop);
+                        projectorWinRef.resizeTo(extScreen.availWidth, extScreen.availHeight);
+                        try {
+                            await projectorWinRef.document.documentElement.requestFullscreen({ screen: extScreen });
+                        } catch {}
+                        window.focus();
+                        return { moved: true, screenCount: details.screens.length };
+                    }
+                    return { moved: false, screenCount: details.screens.length };
+                } catch {
+                    return { moved: false, denied: true };
+                }
+            }
+            return { moved: false, unsupported: true };
+        }
+
+        async function launchDualScreenPresentation() {
+            if (!presSlides || presSlides.length === 0) {
+                showToast('⚠️ Chưa có slide nào để trình chiếu 2 màn hình!');
+                return;
+            }
+            ensureDualChannel(dualChannelId);
+            const opened = await openProjectorWindow();
+            if (!opened) return;
+
+            // Chuyển tab gốc trên Laptop thành Màn hình Giáo viên (Presenter View)
+            let host = document.getElementById('presTeacherHostOverlay');
+            if (!host) {
+                host = document.createElement('div');
+                host.id = 'presTeacherHostOverlay';
+                host.innerHTML = `<iframe id="presTeacherIframe"></iframe>`;
+                document.body.appendChild(host);
+            }
+            const iframe = document.getElementById('presTeacherIframe');
+            iframe.src = `/presenter?channel=${encodeURIComponent(dualChannelId)}`;
+            host.style.display = 'block';
+
+            setTimeout(() => broadcastFullState(), 350);
+            showToast('🖥️ Đã mở Máy chiếu! Kéo cửa sổ Máy chiếu sang màn hình HDMI & bấm F11.');
+        }
+
+        function exitDualScreenMode() {
+            const host = document.getElementById('presTeacherHostOverlay');
+            if (host) {
+                host.style.display = 'none';
+                const iframe = document.getElementById('presTeacherIframe');
+                if (iframe) iframe.src = 'about:blank';
+            }
+            if (projectorWinRef && !projectorWinRef.closed) {
+                projectorWinRef.close();
+            }
+        }
+
+        if (isProjectorSlave) {
+            ensureDualChannel(dualChannelId || 'default');
+            window.addEventListener('DOMContentLoaded', () => {
+                const overlay = document.getElementById('presentationOverlay');
+                const floatBar = document.getElementById('presProjectorFloatBar');
+                if (overlay) {
+                    overlay.style.display = 'flex';
+                    overlay.classList.add('pres-projector-slave');
+                }
+                if (floatBar) {
+                    floatBar.style.display = 'flex';
+                    // Nổi rõ hơn khi chưa Fullscreen để bấm 1 chạm là Full màn, tự mờ đi khi đã Fullscreen
+                    const updateFloatBarVis = () => {
+                        floatBar.style.opacity = document.fullscreenElement ? '' : '0.92';
+                    };
+                    updateFloatBarVis();
+                    document.addEventListener('fullscreenchange', updateFloatBarVis);
+                }
+                document.body.style.overflow = 'hidden';
+                presBroadcast.postMessage({ type: 'SYNC_HANDSHAKE_REQ', payload: { role: 'projector' } });
+                setInterval(() => {
+                    presBroadcast.postMessage({ type: 'PING_STATUS', payload: { role: 'projector', ts: Date.now() } });
+                }, 1500);
+
+                // Tự động yêu cầu Fullscreen khi người dùng click bất kỳ điểm nào trên cửa sổ Máy chiếu
+                const autoFsHandler = () => {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                    window.removeEventListener('click', autoFsHandler);
+                };
+                window.addEventListener('click', autoFsHandler);
+            });
         }
 
     </script>

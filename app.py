@@ -92,6 +92,11 @@ ai_client = get_gemini_client(DEFAULT_API_KEYS[0]) if DEFAULT_API_KEYS else None
 
 app = FastAPI(title="Math OCR Tool")
 
+# Thư mục tài nguyên cục bộ (KaTeX, Cropper.js chạy 100% Offline không cần Wi-Fi)
+STATIC_DIR = Path("static")
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 # Thư mục tạm
 TEMP_DIR = Path("temp_output")
 TEMP_DIR.mkdir(exist_ok=True)
@@ -289,6 +294,15 @@ def parse_page_range(page_range_str: str, max_pages: int) -> list[int]:
 @app.get("/", response_class=HTMLResponse)
 async def home():
     html_path = Path(__file__).parent / "templates" / "index.html"
+    return HTMLResponse(
+        html_path.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"}
+    )
+
+
+@app.get("/presenter", response_class=HTMLResponse)
+async def presenter_view():
+    html_path = Path(__file__).parent / "templates" / "presenter.html"
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
@@ -1054,7 +1068,7 @@ AVAILABLE_FALLBACKS = [
 ]
 
 
-async def _generate_content_with_retry(img, prompt_text: str, model_name: str = "auto", api_keys: list = None, timeout_seconds: float = 16.0) -> tuple:
+async def _generate_content_with_retry(img, prompt_text: str, model_name: str = "auto", api_keys: list = None, timeout_seconds: float = 35.0) -> tuple:
     """
     Gọi Gemini với cơ chế bất đồng bộ non-blocking (asyncio.to_thread),
     tự động nén tối ưu ảnh, áp dụng Timeout Fail-Fast và fallback sang model/key khác khi gặp lỗi.
@@ -1985,6 +1999,12 @@ async def export_docx(
     pages_json: str = Form(...),  # JSON string of list of dicts: [{"page": 1, "latex": "..."}]
     session_id: str = Form(None),
     math_format: str = Form("omml"),  # "omml" (Word native Equation) hoặc "latex" ($...$ và $$...$$)
+    margin_top: float = Form(2.0),
+    margin_bottom: float = Form(2.0),
+    margin_left: float = Form(3.0),
+    margin_right: float = Form(2.0),
+    line_spacing: float = Form(1.15),
+    space_after: float = Form(3.0),
 ):
     """Xuất kết quả LaTeX sang file Word (.docx) chứa công thức native OMML hoặc văn bản LaTeX và hình ảnh tự động nhúng."""
     try:
@@ -2037,7 +2057,13 @@ async def export_docx(
             str(out_path),
             title=title,
             session_dir=session_dir,
-            math_format=math_format
+            math_format=math_format,
+            margin_top=margin_top,
+            margin_bottom=margin_bottom,
+            margin_left=margin_left,
+            margin_right=margin_right,
+            line_spacing=line_spacing,
+            space_after=space_after,
         )
 
         return FileResponse(

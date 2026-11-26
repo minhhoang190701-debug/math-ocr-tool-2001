@@ -22,7 +22,7 @@ from lxml import etree
 import latex2mathml.converter
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from core.omml_converter import sanitize_plain_text_vectors, ensure_math_spacing_bridge
@@ -126,6 +126,9 @@ def clean_latex_math(latex_str: str) -> str:
     # 🎯 Chuẩn hóa phân số thiếu ngoặc nhọn dạng \frac{1}2 hoặc \frac12 -> \frac{1}{2}
     s = re.sub(r'\\frac\{([^{}]+)\}([a-zA-Z0-9])', r'\\frac{\1}{\2}', s)
     s = re.sub(r'\\frac([a-zA-Z0-9])([a-zA-Z0-9])', r'\\frac{\1}{\2}', s)
+
+    # Chuẩn hóa dấu phẩy đạo hàm thừa dấu mũ: ^{\prime} -> '
+    s = re.sub(r'\^\{\s*\\prime\s*\}', "'", s)
 
     # Bọc số âm/dấu trừ đơn nguyên tránh lỗi ô vuông đứt nét
     s = wrap_negative_numbers(s)
@@ -511,11 +514,24 @@ def unwrap_vietnamese_math(text: str) -> str:
         re.IGNORECASE
     )
 
+    def _try_unwrap_stat_list(inner: str) -> str | None:
+        cleaned = re.sub(r'\\(?:qquad|quad|enspace|hspace\{[^}]*\})|\\[;,:\s]', ' ', inner)
+        if re.search(r'[a-zA-Z\\=+\*/\^_<>≤≥≠\(\)\[\]\{\}]', cleaned):
+            return None
+        nums = re.findall(r'\d+(?:[.,]\d+)?', cleaned)
+        if len(nums) >= 4:
+            return "; ".join(nums)
+        return None
+
     def repl_vn(m):
         full = m.group(0)
         content = m.group(1)
         if full.startswith('$$'):
-            return full
+            stat = _try_unwrap_stat_list(content)
+            return f" {stat} " if stat else full
+        stat = _try_unwrap_stat_list(content)
+        if stat:
+            return f" {stat} "
         # NẾU LÀ TOÁN HỌC THỰC THỤ: BẢO VỆ NGUYÊN VẸN 100%, TUYỆT ĐỐI KHÔNG UNWRAP!
         if is_real_math_content(content):
             return full
@@ -528,7 +544,9 @@ def unwrap_vietnamese_math(text: str) -> str:
     out_parts = []
     for part in parts:
         if part.startswith('$$'):
-            out_parts.append(part)
+            inner_disp = part[2:-2]
+            stat = _try_unwrap_stat_list(inner_disp)
+            out_parts.append(f" {stat} " if stat else part)
         else:
             unwrapped = re.sub(r'(?<!\$)\$([^\$]{1,800}?)\$(?!\$)', repl_vn, part, flags=re.DOTALL)
             out_parts.append(unwrapped)
@@ -1324,18 +1342,20 @@ def normalize_choice_structure(text: str) -> str:
 
         # 🎯 CHỈ nhận B. là phương án khi trong câu đã xuất hiện A.
         if lbl.startswith('B.'):
-            if not re.search(r'(?:^|\n|\s{2,})A\.\s+', q_text):
+            if not re.search(r'(?:^|\n|\s)A\.\s+', q_text):
                 return full
         elif lbl.startswith('C.'):
-            if not re.search(r'(?:^|\n|\s{2,})B\.\s+', q_text):
+            if not re.search(r'(?:^|\n|\s)B\.\s+', q_text):
                 return full
         elif lbl.startswith('D.'):
-            if not re.search(r'(?:^|\n|\s{2,})C\.\s+', q_text):
+            if not re.search(r'(?:^|\n|\s)C\.\s+', q_text):
                 return full
 
         return f"\n\n{lbl} "
 
-    text = re.sub(r'(?<!\n)\s*(\b[B-D]\.\s+)', _split_choice_bcd, text)
+    # Chạy tuần tự B -> C -> D để đảm bảo C. và D. luôn nhận diện được phương án liền trước đã tách
+    for _target_lbl in ('B', 'C', 'D'):
+        text = re.sub(rf'(?<!\n)\s*(\b{_target_lbl}\.\s+)', _split_choice_bcd, text)
 
     # Đảm bảo ngắt dòng cho bất kỳ A. nào đứng độc lập nếu theo sau có B. (bảo vệ Chọn A., Đáp án A.)
     def _split_choice_a(m):
@@ -1526,14 +1546,14 @@ def split_into_paragraphs(text: str) -> list[str]:
     # Chuẩn hóa nhãn câu hỏi (gỡ $) và tách điểm số tự luận ra ngoài equation
     text = clean_exam_text(text)
 
+    # Dọn dẹp ký tự thừa trước khi tách cấu trúc phương án (tránh join_broken_ocr_lines gộp lại)
+    text = clean_raw_text(text)
+
     # Chuẩn hóa cấu trúc trắc nghiệm trước khi xử lý ký hiệu toán
     text = normalize_choice_structure(text)
 
     # Bọc ký hiệu toán học
     text = auto_wrap_math_symbols(text)
-
-    # Dọn dẹp ký tự thừa
-    text = clean_raw_text(text)
 
     # Đảm bảo mỗi token placeholder đứng trên dòng riêng biệt
     text = re.sub(r'\s*(@@__PLACEHOLDER_IMG_TAG_\d+__@@)\s*', r'\n\n\1\n\n', text)
@@ -2239,40 +2259,195 @@ def insert_image_into_doc(doc, img_path: Path | str, desc: str = "", math_format
         return False
 
 
+def _prepare_choice_body_text(body_candidate: str, is_latex_mode: bool) -> str:
+    """Làm sạch và tự động bọc $...$ cho biểu thức toán học ngắn trong phương án trắc nghiệm."""
+    body_text = sanitize_text_aesthetics(body_candidate)
+    if not is_latex_mode and '$' not in body_text:
+        m_dot = re.match(r'^(.*?)([\.]?)$', body_text)
+        expr = m_dot.group(1).strip() if m_dot else body_text
+        trailing_dot = m_dot.group(2) if m_dot else ""
+        is_math_expr = (
+            bool(re.match(r'^[-+]?\d+(?:[\.,]\d+)?$', expr)) or
+            bool(re.match(r'^\{[-+0-9a-zA-Z;,\s\.\\]+\}$', expr)) or
+            bool(re.match(r'^[a-zA-Z]$', expr)) or
+            bool(re.search(r'[=<>≤≥≠\+\-\*\/_^\\]|(?:\b[a-zA-Z]\b.*?\d)|\d+\s*[a-zA-Z]|[\(\[][-+]?\d+', expr))
+        ) and not bool(re.search(r'\b(hàm\s+số|đồng\s+biến|nghịch\s+biến|liên\s+tục|có|không|với\s+mọi|thỏa\s+mãn|biểu\s+diễn)\b', expr, re.IGNORECASE))
+        if is_math_expr:
+            body_text = f"${expr}${trailing_dot}"
+    return body_text
+
+
+def _estimate_choice_metrics(label_str: str, body_text: str) -> tuple[int, bool]:
+    """Ước lượng độ dài hiển thị (ký tự) và kiểm tra công thức cao (phân số, tích phân, hệ) của một phương án."""
+    has_tall_math = bool(re.search(
+        r'\\(?:frac|dfrac|tfrac|int|sum|prod|lim|begin\{(?:cases|matrix|pmatrix|bmatrix|aligned)\})',
+        body_text
+    ))
+    vis = body_text.replace('$', '')
+    frac_count = len(re.findall(r'\\(?:d|t)?frac\b', vis))
+    sqrt_count = len(re.findall(r'\\sqrt\b', vis))
+    vis = re.sub(r'\\[a-zA-Z]+', 'x', vis)
+    vis = re.sub(r'[{}]', '', vis)
+    vis_len = len(label_str) + 1 + len(vis.strip()) + frac_count * 2 + sqrt_count * 2
+    return vis_len, has_tall_math
+
+
+def _append_choice_item_to_paragraph(p, label_str: str, body_text: str, is_latex_mode: bool):
+    """Chèn nhãn in đậm (ngoài Equation) và nội dung phương án vào đoạn văn bản Word."""
+    r_lbl = p.add_run(label_str + " ")
+    r_lbl.bold = True
+    r_lbl.italic = False
+    r_lbl.font.name = 'Times New Roman'
+    r_lbl.font.size = Pt(12)
+
+    body_segments = parse_latex_content(body_text)
+    for b_seg in body_segments:
+        if b_seg['type'] == 'text_runs':
+            for r_info in b_seg['runs']:
+                txt = r_info['text']
+                if not txt:
+                    continue
+                run = p.add_run(txt)
+                run.bold = r_info.get('bold', False)
+        elif b_seg['type'] == 'inline_math':
+            if is_latex_mode:
+                p.add_run(f"${b_seg['content']}$")
+            else:
+                add_math_to_paragraph(p, b_seg['content'], is_display=False)
+        elif b_seg['type'] == 'display_math':
+            if is_latex_mode:
+                p.add_run(f"$${b_seg['content']}$$")
+            else:
+                add_math_to_paragraph(p, b_seg['content'], is_display=True)
+
+
+def _render_choice_columns(doc, prepared: list[tuple[str, str]], tab_positions: tuple[float, ...], is_latex_mode: bool, space_after: float = 2.0):
+    """Xuất danh sách phương án/ý con theo số cột quy định bởi tab_positions (đơn vị cm)."""
+    cols = len(tab_positions)
+    sa = Pt(min(space_after, 3.0))
+    sb = Pt(2 if space_after > 0 else 1)
+    for i in range(0, len(prepared), cols):
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p.paragraph_format.space_before = sb
+        p.paragraph_format.space_after = sa
+        p.paragraph_format.left_indent = Cm(0)
+        for pos in tab_positions:
+            p.paragraph_format.tab_stops.add_tab_stop(Cm(round(pos, 2)), WD_TAB_ALIGNMENT.LEFT)
+        for j in range(cols):
+            if i + j < len(prepared):
+                p.add_run("\t")
+                _append_choice_item_to_paragraph(p, prepared[i + j][0], prepared[i + j][1], is_latex_mode)
+
+
+def _flush_choice_buffer(
+    doc,
+    choice_buffer: list[tuple[str, str]],
+    is_latex_mode: bool,
+    is_true_false_section: bool = False,
+    printable_width_cm: float = 16.0,
+    space_after: float = 3.0,
+):
+    """
+    Xuất nhóm phương án trắc nghiệm (A. B. C. D.) hoặc ý tự luận (a)... z), 1)...)
+    theo bố cục tối ưu (4 cột / 3 cột / 2 cột dùng Tab Stop co giãn theo lề trang / dọc).
+    """
+    if not choice_buffer:
+        return
+
+    prepared = [(lbl, _prepare_choice_body_text(body, is_latex_mode)) for lbl, body in choice_buffer]
+    metrics = [_estimate_choice_metrics(lbl, body) for lbl, body in prepared]
+    max_len = max(m[0] for m in metrics)
+    any_tall = any(m[1] for m in metrics)
+    labels = [lbl for lbl, _ in prepared]
+
+    is_abcd_mcq = (len(prepared) == 4 and labels == ['A.', 'B.', 'C.', 'D.'])
+    span = max(8.0, printable_width_cm - 0.5)
+    sa_vert = Pt(min(space_after, 3.0))
+    sb_vert = Pt(2 if space_after > 0 else 1)
+
+    if is_abcd_mcq:
+        if max_len <= 13 and not any_tall:
+            tabs_4 = (0.5, 0.5 + span * 0.25, 0.5 + span * 0.5, 0.5 + span * 0.75)
+            _render_choice_columns(doc, prepared, tabs_4, is_latex_mode, space_after=space_after)
+        elif max_len <= 32:
+            tabs_2 = (0.5, 0.5 + span * 0.5)
+            _render_choice_columns(doc, prepared, tabs_2, is_latex_mode, space_after=space_after)
+        else:
+            for lbl, body in prepared:
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                p.paragraph_format.space_before = sb_vert
+                p.paragraph_format.space_after = sa_vert
+                p.paragraph_format.left_indent = Inches(0.2)
+                _append_choice_item_to_paragraph(p, lbl, body, is_latex_mode)
+    elif not is_true_false_section and len(prepared) >= 3 and len(prepared) != 4 and max_len <= 17 and not any_tall:
+        tabs_3 = (0.5, 0.5 + span / 3.0, 0.5 + span * 2.0 / 3.0)
+        _render_choice_columns(doc, prepared, tabs_3, is_latex_mode, space_after=space_after)
+    elif not is_true_false_section and len(prepared) >= 2 and max_len <= 28 and not any_tall:
+        tabs_2 = (0.5, 0.5 + span * 0.5)
+        _render_choice_columns(doc, prepared, tabs_2, is_latex_mode, space_after=space_after)
+    else:
+        for lbl, body in prepared:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.paragraph_format.space_before = sb_vert
+            p.paragraph_format.space_after = sa_vert
+            p.paragraph_format.left_indent = Inches(0.2)
+            _append_choice_item_to_paragraph(p, lbl, body, is_latex_mode)
+
+    choice_buffer.clear()
+
+
 def export_latex_to_docx(
     pages_data: list[dict],
     output_path: str,
     title: str = "Tài liệu Toán học",
     session_dir: str | Path = None,
-    math_format: str = "omml"
+    math_format: str = "omml",
+    margin_top: float = 2.0,
+    margin_bottom: float = 2.0,
+    margin_left: float = 3.0,
+    margin_right: float = 2.0,
+    line_spacing: float = 1.15,
+    space_after: float = 3.0,
 ) -> str:
     """
     Xuất danh sách các trang LaTeX sang file Word chuẩn:
     - Font Times New Roman 12pt
-    - Lề: Top 2cm, Bottom 2cm, Left 3cm, Right 2cm
-    - Giãn dòng: Single (1.0), Space after 4pt
-    - Tách đoạn trước mỗi Câu X và phương án A. B. C. D.
+    - Lề A4 tùy chỉnh (mặc định Nghị định 30: Trên 2cm, Dưới 2cm, Trái 3cm, Phải 2cm)
+    - Giãn dòng tùy chỉnh (mặc định 1.15, Space after 3pt)
+    - Tự động cân 4 cột / 3 cột / 2 cột dùng Tab Stop co giãn theo bề rộng vùng in
     - Chèn ảnh trực tiếp nếu có file cắt ảnh (không chèn caption thừa bên dưới)
     - Hỗ trợ 2 chế độ công thức: OMML (Word native equation) hoặc LaTeX text ($...$, $$...$$)
-    - Không chèn bảng báo cáo rà soát hay checklist gây thừa
     """
     doc = Document()
     is_latex_mode = (str(math_format).lower() in ("latex", "raw", "text"))
 
-    # Cài đặt lề chuẩn trang A4 theo Nghị định 30/2020/NĐ-CP
+    m_top = max(0.4, min(5.0, float(margin_top)))
+    m_bot = max(0.4, min(5.0, float(margin_bottom)))
+    m_left = max(0.4, min(5.0, float(margin_left)))
+    m_right = max(0.4, min(5.0, float(margin_right)))
+    l_spacing = max(0.8, min(2.5, float(line_spacing)))
+    s_after = max(0.0, min(24.0, float(space_after)))
+    printable_width_cm = max(10.0, 21.0 - m_left - m_right)
+
+    # Cài đặt lề trang A4
     for section in doc.sections:
-        section.top_margin = Cm(2.0)
-        section.bottom_margin = Cm(2.0)
-        section.left_margin = Cm(3.0)
-        section.right_margin = Cm(2.0)
+        section.page_width = Cm(21.0)
+        section.page_height = Cm(29.7)
+        section.top_margin = Cm(m_top)
+        section.bottom_margin = Cm(m_bot)
+        section.left_margin = Cm(m_left)
+        section.right_margin = Cm(m_right)
 
     # Cài đặt Style Normal chuẩn
     style = doc.styles['Normal']
     font = style.font
     font.name = 'Times New Roman'
     font.size = Pt(12)
-    style.paragraph_format.line_spacing = 1.0  # Single
-    style.paragraph_format.space_after = Pt(4)
+    style.paragraph_format.line_spacing = l_spacing
+    style.paragraph_format.space_after = Pt(s_after)
     style.paragraph_format.space_before = Pt(0)
 
     # ── Bóc tách và chèn Header Đề thi 2 cột chuẩn thể thức Bộ GD&ĐT / Nghị định 30 ──
@@ -2304,6 +2479,7 @@ def export_latex_to_docx(
     # Chuẩn bị đường dẫn thư mục tạm để tìm ảnh
     sess_path = Path(session_dir) if session_dir else None
     used_image_names = set()
+    current_section_type = "general"
 
     for page_info in pages_data:
         latex_text = page_info.get('latex', '')
@@ -2318,6 +2494,7 @@ def export_latex_to_docx(
         latex_text = sanitize_text_aesthetics(latex_text)
         paragraphs = split_into_paragraphs(latex_text)
         current_q_choices = set()
+        choice_buffer: list[tuple[str, str]] = []
 
         for para_text in paragraphs:
             segments = parse_latex_content(para_text)
@@ -2329,6 +2506,7 @@ def export_latex_to_docx(
             non_placeholder_segs = [s for s in segments if s.get('type') != 'placeholder']
 
             if placeholder_segs:
+                _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
                 for info in placeholder_segs:
                     img_name = info.get('image')
                     inserted = False
@@ -2405,6 +2583,7 @@ def export_latex_to_docx(
 
             # ── 2. Kiểm tra nếu đoạn chỉ gồm 1 công thức display ($$...$$) ──
             if len(segments) == 1 and segments[0]['type'] == 'display_math':
+                _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
                 p = doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p.paragraph_format.space_before = Pt(4)
@@ -2435,12 +2614,20 @@ def export_latex_to_docx(
             # ── 3. Phân loại & xử lý TIÊU ĐỀ PHẦN (PHẦN 1, PHẦN I, I. PHẦN, PHẦN CÂU TRẮC NGHIỆM,...) ──
             m_sec = re.match(r'^\s*((?:[IVXLCDM]+\.|\d+\.|\b[A-Z]\.)?\s*(?:PHẦN|Phần)\b.*)$', rem_text, re.DOTALL | re.IGNORECASE)
             if m_sec:
+                _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
                 current_q_choices.clear()
                 p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(12)
+                p.paragraph_format.space_before = Pt(10)
                 p.paragraph_format.space_after = Pt(4)
 
                 sec_title = m_sec.group(1).strip()
+                sec_lower = sec_title.lower()
+                if re.search(r'đúng\s*(?:[\-\/,]|hoặc)?\s*sai', sec_lower):
+                    current_section_type = "true_false"
+                elif re.search(r'trả\s+lời\s+ngắn|tự\s+luận', sec_lower):
+                    current_section_type = "essay"
+                else:
+                    current_section_type = "mcq"
                 add_text_and_math_runs(p, sec_title, bold=True, font_size=Pt(12), math_format=math_format)
                 continue
 
@@ -2474,62 +2661,23 @@ def export_latex_to_docx(
 
                 if is_valid_choice:
                     current_q_choices.add(label_candidate)
-                    p = doc.add_paragraph()
-                    p.paragraph_format.space_before = Pt(2)
-                    p.paragraph_format.space_after = Pt(2)
-                    p.paragraph_format.left_indent = Inches(0.2)
-
-                    label_str = label_candidate
-                    r_lbl = p.add_run(label_str + " ")
-                    r_lbl.bold = True
-                    r_lbl.italic = False
-                    r_lbl.font.name = 'Times New Roman'
-                    r_lbl.font.size = Pt(12)
-
-                    body_text = sanitize_text_aesthetics(body_candidate)
-
-                    # Tự động đưa biểu thức toán học phía sau vào Equation (OMML) nếu chưa được bọc $...$
-                    if not is_latex_mode and '$' not in body_text:
-                        m_dot = re.match(r'^(.*?)([\.]?)$', body_text)
-                        expr = m_dot.group(1).strip() if m_dot else body_text
-                        trailing_dot = m_dot.group(2) if m_dot else ""
-                        is_math_expr = (
-                            bool(re.match(r'^[-+]?\d+(?:[\.,]\d+)?$', expr)) or  # Số đơn lẻ: 0, 1, 2, 5, 21, -4...
-                            bool(re.match(r'^\{[-+0-9a-zA-Z;,\s\.\\]+\}$', expr)) or  # Tập hợp: {-4; 1; 0}
-                            bool(re.match(r'^[a-zA-Z]$', expr)) or  # Ký hiệu chữ đơn lẻ: x, y, m
-                            bool(re.search(r'[=<>≤≥≠\+\-\*\/_^\\]|(?:\b[a-zA-Z]\b.*?\d)|\d+\s*[a-zA-Z]|[\(\[][-+]?\d+', expr))
-                        ) and not bool(re.search(r'\b(hàm\s+số|đồng\s+biến|nghịch\s+biến|liên\s+tục|có|không|với\s+mọi|thỏa\s+mãn|biểu\s+diễn)\b', expr, re.IGNORECASE))
-                        if is_math_expr:
-                            body_text = f"${expr}${trailing_dot}"
-
-                    body_segments = parse_latex_content(body_text)
-                    for b_seg in body_segments:
-                        if b_seg['type'] == 'text_runs':
-                            for r_info in b_seg['runs']:
-                                txt = r_info['text']
-                                if not txt:
-                                    continue
-                                run = p.add_run(txt)
-                                run.bold = r_info.get('bold', False)
-                        elif b_seg['type'] == 'inline_math':
-                            if is_latex_mode:
-                                p.add_run(f"${b_seg['content']}$")
-                            else:
-                                add_math_to_paragraph(p, b_seg['content'], is_display=False)
-                        elif b_seg['type'] == 'display_math':
-                            if is_latex_mode:
-                                p.add_run(f"$${b_seg['content']}$$")
-                            else:
-                                add_math_to_paragraph(p, b_seg['content'], is_display=True)
+                    # Nếu gặp lại A. hoặc a) khi buffer đang có nhóm trước -> xuất nhóm cũ trước
+                    if label_candidate in ('A.', 'a)', '(a)', 'a/', 'a.', '1)', '(1)', '1/', '1.') and choice_buffer:
+                        _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
+                    choice_buffer.append((label_candidate, body_candidate))
                     continue
+
+            # Nếu không phải phương án / ý con -> xuất toàn bộ nhóm phương án đang đệm (nếu có)
+            _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
 
             # ── 5. Phân loại & xử lý câu hỏi (Câu 1:, Câu 2., Bài 1 (1,5 điểm)...) ──
             m_question = re.match(r'^(\s*(?:Câu|Bài|Đề|Ví dụ)\s+(?:\$?\d+\$?)(?:\s*\([^\)\n]*\))?\s*[\.:]\s*)(.*)$', rem_text, re.DOTALL)
             if m_question:
                 current_q_choices.clear()
                 p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(8)
-                p.paragraph_format.space_after = Pt(3)
+                p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                p.paragraph_format.space_before = Pt(6 if s_after >= 2.0 else 3)
+                p.paragraph_format.space_after = Pt(min(s_after, 3.0))
 
                 label_str = m_question.group(1).strip()
                 # 🎯 TASK 4: Tách điểm số tự luận ra ngoài công thức toán, hiển thị in nghiêng sau nhãn câu hỏi in đậm
@@ -2595,6 +2743,7 @@ def export_latex_to_docx(
             m_sol = re.match(r'^\s*(\b(?:Lời\s+giải|Hướng\s+dẫn\s+giải|Giải\s+chi\s+tiết|HƯỚNG\s+DẪN\s+GIẢI|LỜI\s+GIẢI|GIẢI\s+CHI\s+TIẾT|HDG)\s*[:\.\-]?)(.*)$', rem_text, re.DOTALL | re.IGNORECASE)
             if m_sol:
                 p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                 p.paragraph_format.space_before = Pt(6)
                 p.paragraph_format.space_after = Pt(2)
                 sol_lbl = m_sol.group(1).strip()
@@ -2735,6 +2884,7 @@ def export_latex_to_docx(
                     continue
 
             p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             for seg in segments:
                 if seg['type'] == 'text_runs':
                     for r_info in seg['runs']:
@@ -2761,6 +2911,8 @@ def export_latex_to_docx(
                         p_disp.paragraph_format.space_before = Pt(4)
                         p_disp.paragraph_format.space_after = Pt(6)
                         add_math_to_paragraph(p_disp, seg['content'], is_display=True)
+
+        _flush_choice_buffer(doc, choice_buffer, is_latex_mode, is_true_false_section=(current_section_type == "true_false"), printable_width_cm=printable_width_cm, space_after=s_after)
 
     doc.save(output_path)
     return output_path

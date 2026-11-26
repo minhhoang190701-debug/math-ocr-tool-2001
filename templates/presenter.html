@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎓 Màn Hình Giáo Viên (Presenter View) — Math Slide</title>
+    <!-- KaTeX (100% Offline Local) -->
+    <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+    <script src="/static/vendor/katex/katex.min.js"></script>
+    <script src="/static/vendor/katex/auto-render.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b1120;
+            --surface: #131c31;
+            --surface-2: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .pv-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.65rem 1.2rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            gap: 0.8rem;
+            flex-shrink: 0;
+        }
+        .pv-header-left, .pv-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+        }
+        .pv-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+        }
+        .pv-badge.connected {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.14);
+            color: #34d399;
+        }
+        .pv-badge.waiting {
+            border-color: rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.14);
+            color: #fbbf24;
+        }
+        .pv-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 0.48rem 0.9rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .pv-btn:hover { background: #293548; border-color: #475569; }
+        .pv-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .pv-btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .pv-btn.primary:hover { background: #2563eb; }
+        .pv-btn.success { background: rgba(16, 185, 129, 0.2); border-color: var(--success); color: #34d399; }
+        .pv-btn.success.active { background: var(--success); color: #052e16; }
+        .pv-btn.warning.active { background: var(--warning); border-color: var(--warning); color: #451a03; }
+        .pv-btn.danger { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
+        .pv-btn.danger.active { background: var(--danger); color: #fff; }
+        .pv-btn.purple { background: rgba(139, 92, 246, 0.18); border-color: rgba(139, 92, 246, 0.5); color: #c4b5fd; }
+
+        /* Main Grid */
+        .pv-main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1.45fr 1fr;
+            gap: 1rem;
+            padding: 1rem 1.2rem;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .pv-col {
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        /* Cards */
+        .pv-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.95rem 1.1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .pv-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.7);
+            padding-bottom: 0.55rem;
+        }
+        .pv-card-title {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        /* Live Preview Box */
+        .pv-preview-wrap {
+            position: relative;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 1rem 1.1rem;
+            min-height: 180px;
+        }
+        .pv-draw-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            border-radius: 10px;
+        }
+        .pv-draw-canvas.active {
+            pointer-events: auto;
+            cursor: crosshair;
+            box-shadow: inset 0 0 0 2px rgba(250, 204, 21, 0.7);
+        }
+        .pv-draw-toolbar {
+            display: none;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            padding: 0.45rem 0.65rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+        }
+        .pv-draw-toolbar.active {
+            display: flex;
+        }
+        .pv-draw-sep {
+            width: 1px;
+            height: 18px;
+            background: #334155;
+            margin: 0 2px;
+        }
+        .pv-color-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            padding: 0;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .pv-color-dot:hover { transform: scale(1.15); }
+        .pv-color-dot.active {
+            border-color: #ffffff;
+            transform: scale(1.16);
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+        .pv-scratchpad-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            display: none;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        .pv-scratchpad-layer.active { display: block; }
+        .pv-scratchpad-layer.theme-0 {
+            background: radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%);
+            background-image:
+                radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                radial-gradient(120% 90% at 50% 0%, #2b5c4c 0%, #1f4a3d 55%, #183b31 100%);
+            background-size: 24px 24px, 100% 100%;
+        }
+        .pv-scratchpad-layer.theme-1 {
+            background-color: #ffffff;
+            background-image: radial-gradient(rgba(15, 23, 42, 0.12) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .pv-scratchpad-layer.theme-2 {
+            background-color: #090d16;
+            background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .pv-scratchpad-badge {
+            position: absolute;
+            bottom: 8px;
+            left: 10px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.72);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .pv-q-title {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            padding: 0.18rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 0.55rem;
+        }
+        .pv-q-body {
+            font-size: 1.02rem;
+            line-height: 1.6;
+            color: #f8fafc;
+        }
+        .pv-q-img {
+            max-width: 100%;
+            max-height: 220px;
+            border-radius: 8px;
+            margin: 0.65rem 0;
+            border: 1px solid #334155;
+            background: #fff;
+            display: block;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .pv-q-img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+        }
+        .pv-choices {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.55rem;
+            margin-top: 0.8rem;
+        }
+        .pv-choice {
+            padding: 0.55rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: rgba(30, 41, 59, 0.7);
+            font-size: 0.94rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.45rem;
+        }
+        .pv-choice.is-correct {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.16);
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35);
+        }
+        .pv-choice-label {
+            font-weight: 700;
+            color: #93c5fd;
+            flex-shrink: 0;
+        }
+        .pv-choice.is-correct .pv-choice-label {
+            color: #34d399;
+        }
+
+        /* Solution & Notes */
+        .pv-solution-body {
+            font-size: 0.96rem;
+            line-height: 1.65;
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 0.8rem 0.95rem;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+        .pv-notes-area {
+            width: 100%;
+            min-height: 82px;
+            resize: vertical;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #fef08a;
+            font-family: inherit;
+            font-size: 0.92rem;
+            line-height: 1.5;
+            padding: 0.65rem 0.8rem;
+            outline: none;
+        }
+        .pv-notes-area:focus {
+            border-color: var(--warning);
+        }
+
+        /* Timers */
+        .pv-timer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.7rem;
+        }
+        .pv-timer-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 0.7rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .pv-timer-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        .pv-timer-value {
+            font-size: 1.55rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: #f8fafc;
+        }
+        .pv-timer-value.warn { color: #fbbf24; }
+        .pv-timer-value.expired { color: #f87171; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+        .pv-preset-row {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .pv-chip {
+            padding: 0.22rem 0.55rem;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #cbd5e1;
+            font-size: 0.76rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .pv-chip.active, .pv-chip:hover {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.22);
+            color: #93c5fd;
+        }
+
+        /* Controls */
+        .pv-ctrl-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+        .pv-ctrl-row-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+        .pv-font-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            padding-top: 0.35rem;
+            border-top: 1px solid rgba(51, 65, 85, 0.6);
+        }
+        .pv-font-bar .pv-btn {
+            padding: 0.34rem 0.62rem;
+            font-size: 0.8rem;
+        }
+        .pv-compact-card {
+            padding: 0.72rem 0.9rem;
+            gap: 0.55rem;
+        }
+        .pv-compact-card .pv-btn {
+            padding: 0.4rem 0.68rem;
+            font-size: 0.82rem;
+        }
+        .pv-compact-card .pv-timer-box {
+            padding: 0.5rem 0.7rem;
+            gap: 0.2rem;
+        }
+        .pv-compact-card .pv-timer-value {
+            font-size: 1.32rem;
+        }
+
+        /* Question Jump Grid */
+        .pv-q-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+            gap: 0.45rem;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .pv-q-item {
+            position: relative;
+            padding: 0.48rem 0.25rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #cbd5e1;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+        .pv-q-item:hover { border-color: #64748b; background: #1e293b; }
+        .pv-q-item.current {
+            background: var(--primary);
+            border-color: #93c5fd;
+            color: #fff;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.45);
+        }
+        .pv-dot-sol, .pv-dot-note {
+            position: absolute;
+            top: 3px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .pv-dot-sol { right: 4px; background: #10b981; }
+        .pv-dot-note { left: 4px; background: #facc15; }
+
+        .pv-toast {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            padding: 0.55rem 1rem;
+            border-radius: 999px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            z-index: 999;
+            display: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        }
+
+        @media (max-width: 980px) {
+            .pv-main { grid-template-columns: 1fr; overflow-y: auto; }
+            body { height: auto; overflow: auto; }
+        }
+    </style>
+</head>
+<body>
+    <header class="pv-header">
+        <div class="pv-header-left">
+            <button type="button" class="pv-btn danger" onclick="exitPresenterMode()" title="Đóng chế độ 2 màn hình và quay lại trình chiếu thường">
+                ✕ Thoát 2 Màn hình
+            </button>
+            <span id="pvDocTitle" style="font-weight:700; font-size:0.98rem;">Đề thi Toán học</span>
+            <span id="pvSlideCounter" class="pv-badge">Câu 0 / 0</span>
+        </div>
+        <div class="pv-header-right">
+            <span id="pvScreenBadge" class="pv-badge" title="Trạng thái nhận diện màn hình mở rộng (Win + P → Extend)">🖥️ Kiểm tra màn hình...</span>
+            <span id="pvConnBadge" class="pv-badge waiting">🟡 Đang chờ Máy chiếu...</span>
+            <button type="button" class="pv-btn primary" onclick="moveProjectorToScreen2()" title="Tự động đưa cửa sổ Máy chiếu sang màn hình thứ 2 (HDMI Extend) và mở Fullscreen">
+                ⛶ Đưa sang Màn 2
+            </button>
+            <button type="button" class="pv-btn" onclick="reopenProjectorWindow()" title="Mở lại cửa sổ Máy chiếu nếu đã bị đóng">
+                🖥️ Mở lại
+            </button>
+        </div>
+    </header>
+
+    <main class="pv-main">
+        <!-- Cột Trái: Xem trước + Đáp án đúng + Lời giải + Ghi chú -->
+        <section class="pv-col">
+            <div class="pv-card">
+                <div class="pv-card-head">
+                    <div class="pv-card-title">
+                        <span>👁️ Xem trước Slide & Đáp án đúng</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+                        <span id="pvProjectorSolState" class="pv-badge" style="font-size:0.75rem;">🔒 Đáp án đang ẩn trên Máy chiếu</span>
+                        <button type="button" id="pvBtnDrawSync" class="pv-btn warning" style="padding:0.35rem 0.72rem; font-size:0.82rem;" onclick="toggleTeacherDraw()" title="Vẽ trực tiếp trên khung này để hiện lên Máy chiếu (Phím P)">
+                            ✏️ Bút vẽ (P)
+                        </button>
+                    </div>
+                </div>
+                <div class="pv-draw-toolbar" id="pvDrawToolbar">
+                    <button type="button" id="pvModePen" class="pv-chip active" onclick="setTeacherDrawMode('pen')" title="Bút phấn thường">✏️ Phấn</button>
+                    <button type="button" id="pvModeHighlight" class="pv-chip" onclick="setTeacherDrawMode('highlighter')" title="Bút dạ quang Highlight">🖍️ Highlight</button>
+                    <button type="button" id="pvModeEraser" class="pv-chip" onclick="setTeacherDrawMode('eraser')" title="Tẩy cục bộ">🧽 Tẩy</button>
+                    <span class="pv-draw-sep"></span>
+                    <button type="button" class="pv-color-dot" data-color="#ffffff" style="background:#ffffff;" onclick="setTeacherDrawColor('#ffffff')" title="Phấn Trắng"></button>
+                    <button type="button" class="pv-color-dot active" data-color="#facc15" style="background:#facc15;" onclick="setTeacherDrawColor('#facc15')" title="Phấn Vàng"></button>
+                    <button type="button" class="pv-color-dot" data-color="#ef4444" style="background:#ef4444;" onclick="setTeacherDrawColor('#ef4444')" title="Phấn Đỏ"></button>
+                    <button type="button" class="pv-color-dot" data-color="#38bdf8" style="background:#38bdf8;" onclick="setTeacherDrawColor('#38bdf8')" title="Phấn Xanh dương"></button>
+                    <button type="button" class="pv-color-dot" data-color="#4ade80" style="background:#4ade80;" onclick="setTeacherDrawColor('#4ade80')" title="Phấn Xanh lá"></button>
+                    <span class="pv-draw-sep"></span>
+                    <button type="button" class="pv-chip" onclick="undoTeacherDrawing()" title="Hoàn tác nét vẽ cuối (Ctrl+Z)">↩️ Hoàn tác</button>
+                    <button type="button" class="pv-chip" onclick="clearProjectorDrawing()" title="Xóa toàn bộ nét vẽ">🗑️ Xóa hết</button>
+                </div>
+                <div class="pv-preview-wrap" id="pvPreviewWrap">
+                    <div id="pvScratchpadLayer" class="pv-scratchpad-layer theme-0">
+                        <span class="pv-scratchpad-badge">📝 Đang bật Bảng nháp trống trên Máy chiếu (Bấm W để quay lại)</span>
+                    </div>
+                    <canvas id="pvDrawCanvas" class="pv-draw-canvas"></canvas>
+                    <div id="pvPreviewContent">
+                        <div style="color:#94a3b8; text-align:center; padding:2rem 0;">
+                            Đang đồng bộ dữ liệu đề thi qua BroadcastChannel...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pv-card">
+                <div class="pv-card-head">
+                    <div class="pv-card-title">💡 Lời giải chi tiết</div>
+                    <button type="button" id="pvBtnAiSolve" class="pv-btn purple" onclick="solveCurrentWithAI()">
+                        🤖 Gemini Giải đề
+                    </button>
+                </div>
+                <div class="pv-solution-body" id="pvSolutionBox">
+                    <span style="color:#94a3b8;">Chưa có lời giải cho câu này. Bấm [🤖 Gemini Giải đề] để AI giải chi tiết.</span>
+                </div>
+            </div>
+
+            <div class="pv-card">
+                <div class="pv-card-head">
+                    <div class="pv-card-title">📝 Ghi chú giảng dạy (Lưu tự động theo từng câu)</div>
+                    <span id="pvNoteSavedHint" style="font-size:0.75rem; color:#94a3b8;">Tự động lưu</span>
+                </div>
+                <textarea id="pvTeacherNote" class="pv-notes-area" placeholder="Nhập nhắc nhở cho bản thân khi giảng câu này (VD: Nhắc HS đặt điều kiện xác định, lỗi hay sai ở bước biến đổi...)"></textarea>
+            </div>
+        </section>
+
+        <!-- Cột Phải: Đồng hồ + Điều khiển Máy chiếu + Nhảy nhanh câu -->
+        <section class="pv-col">
+            <div class="pv-card pv-compact-card">
+                <div class="pv-card-head" style="padding-bottom:0.4rem;">
+                    <div class="pv-card-title">⏱️ Đồng hồ & Đếm ngược</div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <button type="button" id="pvBtnShowTimerOnProjector" class="pv-chip" onclick="toggleTimerOnProjector()" title="Hiển thị đồng hồ đếm ngược ở góc trên phải màn hình Máy chiếu">
+                            📺 Hiện giờ: Tắt
+                        </button>
+                        <span id="pvWallClock" style="font-size:0.8rem; color:#94a3b8; font-weight:600;">--:--:--</span>
+                    </div>
+                </div>
+                <div class="pv-timer-grid">
+                    <div class="pv-timer-box">
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <div class="pv-timer-label">Buổi dạy</div>
+                            <button type="button" class="pv-chip" style="padding:0.12rem 0.4rem;" onclick="resetSessionStopwatch()" title="Đặt lại thời gian buổi dạy">↺</button>
+                        </div>
+                        <div class="pv-timer-value" id="pvSessionStopwatch">00:00</div>
+                    </div>
+                    <div class="pv-timer-box">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.25rem;">
+                            <div class="pv-timer-label">Đếm ngược</div>
+                            <div style="display:flex; gap:0.25rem;">
+                                <button type="button" id="pvTimerToggleBtn" class="pv-chip active" style="padding:0.12rem 0.45rem;" onclick="toggleQuestionTimer()">▶ Chạy</button>
+                                <button type="button" class="pv-chip" style="padding:0.12rem 0.4rem;" onclick="resetQuestionTimer()">↺</button>
+                            </div>
+                        </div>
+                        <div class="pv-timer-value" id="pvQuestionTimer">01:00</div>
+                    </div>
+                </div>
+                <div class="pv-preset-row">
+                    <button type="button" class="pv-chip" onclick="setQuestionTimerPreset(30)">30s</button>
+                    <button type="button" class="pv-chip active" onclick="setQuestionTimerPreset(60)">60s</button>
+                    <button type="button" class="pv-chip" onclick="setQuestionTimerPreset(90)">90s</button>
+                    <button type="button" class="pv-chip" onclick="setQuestionTimerPreset(120)">2p</button>
+                    <button type="button" class="pv-chip" onclick="setQuestionTimerPreset(180)">3p</button>
+                    <label style="margin-left:auto; display:flex; align-items:center; gap:0.28rem; font-size:0.74rem; color:#cbd5e1; cursor:pointer;">
+                        <input type="checkbox" id="pvAutoResetTimer" checked> Tự reset
+                    </label>
+                </div>
+            </div>
+
+            <div class="pv-card pv-compact-card">
+                <div class="pv-card-head" style="padding-bottom:0.4rem;">
+                    <div class="pv-card-title">🎛️ Điều khiển Máy chiếu</div>
+                    <span id="pvFontSizeBadge" class="pv-badge" style="font-size:0.72rem; padding:0.15rem 0.55rem;">Cỡ chữ: Tự động</span>
+                </div>
+                <div class="pv-ctrl-grid">
+                    <button type="button" class="pv-btn" onclick="prevSlide()">◀ Câu trước (←)</button>
+                    <button type="button" class="pv-btn primary" onclick="nextSlide()">Câu tiếp ▶ (→)</button>
+                    <button type="button" id="pvBtnToggleSol" class="pv-btn success" onclick="toggleProjectorSolution()">
+                        👁️ Chiếu Đáp án (Space)
+                    </button>
+                    <button type="button" id="pvBtnBlackout" class="pv-btn danger" onclick="toggleProjectorBlackout()">
+                        ⬛ Màn đen (B)
+                    </button>
+                </div>
+                <div class="pv-ctrl-row-3">
+                    <button type="button" id="pvBtnZoomGrid" class="pv-btn" onclick="toggleProjectorZoom()" title="Phóng to/Thu nhỏ ảnh trên Máy chiếu (Phím Z)">
+                        🔍 Zoom ảnh (Z)
+                    </button>
+                    <button type="button" id="pvBtnLaserGrid" class="pv-btn" onclick="toggleTeacherLaser()" title="Bật/Tắt con trỏ Laser đỏ (Phím L)">
+                        🔴 Laser (L)
+                    </button>
+                    <button type="button" id="pvBtnScratchpad" class="pv-btn warning" onclick="toggleProjectorScratchpad()" title="Mở bảng nháp trống toàn màn hình trên Máy chiếu (Phím W)">
+                        📝 Bảng nháp (W)
+                    </button>
+                </div>
+                <div class="pv-font-bar">
+                    <span style="font-size:0.76rem; color:#94a3b8; font-weight:700;">Cỡ chữ:</span>
+                    <button type="button" class="pv-btn" onclick="changeProjectorFontSize(-2)" title="Giảm cỡ chữ trên Máy chiếu (Phím -)">A-</button>
+                    <button type="button" class="pv-btn" onclick="resetProjectorFontSize()" title="Về cỡ chữ tự động vừa màn hình">Tự động</button>
+                    <button type="button" class="pv-btn" onclick="changeProjectorFontSize(2)" title="Tăng cỡ chữ trên Máy chiếu (Phím +)">A+</button>
+                    <button type="button" class="pv-btn" style="margin-left:auto;" onclick="cycleProjectorTheme()" title="Đổi màu nền Máy chiếu">🎨 Theme</button>
+                    <button type="button" class="pv-btn" onclick="toggleProjectorSplit()" title="Bật/Tắt chia 2 cột Đề-Hình">🖼️ 2 Cột</button>
+                </div>
+            </div>
+
+            <div class="pv-card" style="flex:1; min-height:180px;">
+                <div class="pv-card-head">
+                    <div class="pv-card-title">🔢 Danh sách câu nhảy nhanh</div>
+                    <span style="font-size:0.74rem; color:#94a3b8;">
+                        <span style="color:#10b981;">●</span> Có lời giải &nbsp;
+                        <span style="color:#facc15;">●</span> Có ghi chú
+                    </span>
+                </div>
+                <div class="pv-q-grid" id="pvQuestionGrid"></div>
+            </div>
+        </section>
+    </main>
+
+    <div id="pvToast" class="pv-toast"></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const channelId = urlParams.get('channel') || 'default';
+        const bc = new BroadcastChannel('math_slide_sync_' + channelId);
+
+        let slides = [];
+        let currentIndex = 0;
+        let sessionId = '';
+        let docTitle = 'Đề thi Toán học';
+        let themeIndex = 0;
+        let isSolutionVisible = false;
+        let isBlackout = false;
+        let splitLayout = true;
+        let choiceLayout = 'auto';
+        let lastProjectorPing = 0;
+
+        // Timer states
+        let sessionSeconds = 0;
+        let timerPresetSeconds = 60;
+        let questionSecondsLeft = 60;
+        let isQuestionTimerRunning = false;
+        let isTimerShownOnProjector = false;
+
+        let isTeacherLaserActive = false;
+        let isProjectorZoomed = false;
+        let isScratchpadActive = false;
+
+        // Multi-tool Chalkboard states
+        let isTeacherDrawActive = false;
+        let isMouseDown = false;
+        let lastNormX = 0;
+        let lastNormY = 0;
+        let teacherDrawColor = '#facc15';
+        let teacherDrawMode = 'pen'; // 'pen' | 'highlighter' | 'eraser'
+        let teacherSlideStrokes = [];
+        let teacherScratchpadStrokes = [];
+        let teacherCurrentStroke = null;
+
+        function toggleProjectorZoom() {
+            isProjectorZoomed = !isProjectorZoomed;
+            const btnZoom = document.getElementById('pvBtnZoomImg');
+            const btnZoomGrid = document.getElementById('pvBtnZoomGrid');
+            if (btnZoom) {
+                if (isProjectorZoomed) {
+                    btnZoom.classList.add('active');
+                    btnZoom.textContent = '✕ Thu nhỏ ảnh (Z)';
+                } else {
+                    btnZoom.classList.remove('active');
+                    btnZoom.textContent = '🔍 Phóng to ảnh (Z)';
+                }
+            }
+            if (btnZoomGrid) {
+                if (isProjectorZoomed) btnZoomGrid.classList.add('active');
+                else btnZoomGrid.classList.remove('active');
+            }
+            bc.postMessage({ type: 'CMD_ZOOM_IMAGE', payload: { action: isProjectorZoomed ? 'open' : 'close' } });
+            showToast(isProjectorZoomed ? '🔍 Đã phóng to ảnh trên Máy chiếu' : '✕ Đã thu nhỏ ảnh trên Máy chiếu');
+        }
+
+        function toggleTeacherLaser() {
+            isTeacherLaserActive = !isTeacherLaserActive;
+            const btnLaser = document.getElementById('pvBtnLaserSync');
+            const btnLaserGrid = document.getElementById('pvBtnLaserGrid');
+            const previewWrap = document.getElementById('pvPreviewWrap');
+
+            if (isTeacherLaserActive) {
+                if (btnLaser) btnLaser.classList.add('active');
+                if (btnLaserGrid) btnLaserGrid.classList.add('active');
+                if (previewWrap) previewWrap.style.cursor = 'crosshair';
+                showToast('🔴 Đã bật Laser: Rê chuột trong ô xem trước để lia đèn trên Máy chiếu');
+            } else {
+                if (btnLaser) btnLaser.classList.remove('active');
+                if (btnLaserGrid) btnLaserGrid.classList.remove('active');
+                if (previewWrap) previewWrap.style.cursor = '';
+            }
+            bc.postMessage({ type: 'CMD_LASER', payload: { action: 'toggle' } });
+        }
+
+        function initLaserPointerSync() {
+            const previewWrap = document.getElementById('pvPreviewWrap');
+            if (!previewWrap) return;
+
+            previewWrap.addEventListener('mousemove', (e) => {
+                if (!isTeacherLaserActive) return;
+                const rect = previewWrap.getBoundingClientRect();
+                const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                bc.postMessage({ type: 'CMD_LASER', payload: { action: 'move', nx, ny } });
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('pvToast');
+            if (!t) return;
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(window._pvToastTimer);
+            window._pvToastTimer = setTimeout(() => { t.style.display = 'none'; }, 2400);
+        }
+
+        function getNotesStorageKey() {
+            const safeTitle = (docTitle || 'default').slice(0, 60);
+            return 'math_presenter_notes_' + safeTitle;
+        }
+
+        function loadSavedNotes() {
+            try {
+                const raw = localStorage.getItem(getNotesStorageKey());
+                return raw ? JSON.parse(raw) : {};
+            } catch {
+                return {};
+            }
+        }
+
+        function saveNoteForCurrentSlide(noteText) {
+            if (!slides[currentIndex]) return;
+            slides[currentIndex].teacherNote = noteText;
+            try {
+                const map = loadSavedNotes();
+                map[currentIndex] = noteText;
+                localStorage.setItem(getNotesStorageKey(), JSON.stringify(map));
+            } catch {}
+            renderQuestionGrid();
+        }
+
+        // Bảo toàn công thức Toán ($..$, $$..$$, \(..\), \[..\]) khi chuyển xuống dòng
+        function formatMathHtml(text) {
+            if (!text) return '';
+            const tokens = [];
+            const masked = String(text).replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]+?\$)/g, (m) => {
+                const idx = tokens.length;
+                tokens.push(m);
+                return `@@MATH_TOK_${idx}@@`;
+            });
+            let html = escapeHtml(masked).replace(/\n/g, '<br>');
+            html = html.replace(/@@MATH_TOK_(\d+)@@/g, (_, idx) => escapeHtml(tokens[Number(idx)]));
+            return html;
+        }
+
+        function renderKatexIn(el) {
+            if (!el || !window.renderMathInElement) return;
+            renderMathInElement(el, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false },
+                    { left: '\\[', right: '\\]', display: true },
+                    { left: '\\(', right: '\\)', display: false },
+                ],
+                throwOnError: false,
+            });
+        }
+
+        function resolveSlideImageSrc(slide) {
+            if (!slide || !slide.imageData) return '';
+            if (slide.imageData.dataUrl) return slide.imageData.dataUrl;
+            if (slide.imageData.imageName && sessionId) {
+                return `/api/image/${sessionId}/${slide.imageData.imageName}`;
+            }
+            return '';
+        }
+
+        function renderAll() {
+            document.getElementById('pvDocTitle').textContent = docTitle || 'Đề thi Toán học';
+            document.getElementById('pvSlideCounter').textContent = slides.length
+                ? `Câu ${currentIndex + 1} / ${slides.length}`
+                : 'Câu 0 / 0';
+
+            const slide = slides[currentIndex];
+            const previewEl = document.getElementById('pvPreviewContent');
+            const solBox = document.getElementById('pvSolutionBox');
+            const noteArea = document.getElementById('pvTeacherNote');
+
+            if (!slide) {
+                previewEl.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:2rem 0;">Chưa có dữ liệu slide. Hãy mở từ màn hình Slide Viewer.</div>';
+                renderQuestionGrid();
+                return;
+            }
+
+            const qBodyText = (slide.questionText || '').replace(/___PRES_IMAGE___/g, '').trim();
+            const imgSrc = resolveSlideImageSrc(slide);
+            let html = `<div class="pv-q-title">${escapeHtml(slide.title || `Câu ${currentIndex + 1}`)}</div>`;
+            html += `<div class="pv-q-body">${formatMathHtml(qBodyText)}</div>`;
+            if (imgSrc) {
+                html += `<img src="${imgSrc}" class="pv-q-img" alt="Hình minh họa" onclick="toggleProjectorZoom()" title="Click để Phóng to/Thu nhỏ ảnh trên Máy chiếu (Phím Z)">`;
+            }
+            if (slide.choices && slide.choices.length > 0) {
+                html += `<div class="pv-choices">`;
+                slide.choices.forEach((c) => {
+                    const correctCls = c.isCorrect ? 'is-correct' : '';
+                    const badge = c.isCorrect ? ' <span style="color:#34d399; font-size:0.78rem; font-weight:700;">✓</span>' : '';
+                    html += `
+                        <div class="pv-choice ${correctCls}">
+                            <span class="pv-choice-label">${escapeHtml(c.label)}${c.label.endsWith('.') ? '' : '.'}</span>
+                            <div>${formatMathHtml(c.text)}${badge}</div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            previewEl.innerHTML = html;
+            renderKatexIn(previewEl);
+
+            if (slide.solution && slide.solution.trim()) {
+                let cleanSol = slide.solution.trim().replace(/^(?:Lời giải|Hướng dẫn giải|Giải chi tiết|HDG)[\s:.\-]*/i, '').trim();
+                solBox.innerHTML = formatMathHtml(cleanSol);
+                renderKatexIn(solBox);
+            } else {
+                solBox.innerHTML = '<span style="color:#94a3b8;">Chưa có lời giải cho câu này. Bấm [🤖 Gemini Giải đề] để AI giải chi tiết.</span>';
+            }
+
+            noteArea.value = slide.teacherNote || '';
+            updateControlStates();
+            renderQuestionGrid();
+        }
+
+        function updateControlStates() {
+            const solState = document.getElementById('pvProjectorSolState');
+            const btnSol = document.getElementById('pvBtnToggleSol');
+            const btnBlack = document.getElementById('pvBtnBlackout');
+
+            if (isSolutionVisible) {
+                solState.textContent = '👁️ Đang chiếu đáp án lên Máy chiếu';
+                solState.className = 'pv-badge connected';
+                btnSol.classList.add('active');
+                btnSol.textContent = '🙈 Ẩn Đáp án (Space)';
+            } else {
+                solState.textContent = '🔒 Đáp án đang ẩn trên Máy chiếu';
+                solState.className = 'pv-badge';
+                btnSol.classList.remove('active');
+                btnSol.textContent = '👁️ Chiếu Đáp án (Space)';
+            }
+
+            if (isBlackout) {
+                btnBlack.classList.add('active');
+                btnBlack.textContent = '💡 Bật lại Máy chiếu (B)';
+            } else {
+                btnBlack.classList.remove('active');
+                btnBlack.textContent = '⬛ Màn đen (B)';
+            }
+        }
+
+        function renderQuestionGrid() {
+            const grid = document.getElementById('pvQuestionGrid');
+            if (!grid) return;
+            grid.innerHTML = slides.map((s, idx) => {
+                const isCur = idx === currentIndex ? 'current' : '';
+                const hasSol = (s.solution && s.solution.trim()) || (s.choices && s.choices.some(c => c.isCorrect));
+                const hasNote = s.teacherNote && s.teacherNote.trim();
+                return `
+                    <button type="button" class="pv-q-item ${isCur}" onclick="gotoSlide(${idx})" title="${escapeHtml(s.title || `Câu ${idx + 1}`)}">
+                        ${idx + 1}
+                        ${hasSol ? '<span class="pv-dot-sol"></span>' : ''}
+                        ${hasNote ? '<span class="pv-dot-note"></span>' : ''}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function gotoSlide(idx) {
+            if (idx < 0 || idx >= slides.length) return;
+            currentIndex = idx;
+            isSolutionVisible = false;
+            isProjectorZoomed = false;
+            const btnZoom = document.getElementById('pvBtnZoomImg');
+            if (btnZoom) {
+                btnZoom.classList.remove('active');
+                btnZoom.textContent = '🔍 Phóng to ảnh (Z)';
+            }
+            clearTeacherPreviewCanvas();
+            if (document.getElementById('pvAutoResetTimer').checked) {
+                resetQuestionTimer();
+            }
+            renderAll();
+            bc.postMessage({ type: 'CMD_GOTO_SLIDE', payload: { index: currentIndex } });
+        }
+
+        function nextSlide() {
+            if (currentIndex < slides.length - 1) gotoSlide(currentIndex + 1);
+            else showToast('Đã đến câu hỏi cuối cùng!');
+        }
+
+        function prevSlide() {
+            if (currentIndex > 0) gotoSlide(currentIndex - 1);
+        }
+
+        function toggleProjectorSolution() {
+            isSolutionVisible = !isSolutionVisible;
+            updateControlStates();
+            bc.postMessage({ type: 'CMD_TOGGLE_SOLUTION', payload: { visible: isSolutionVisible } });
+        }
+
+        function toggleProjectorBlackout() {
+            isBlackout = !isBlackout;
+            updateControlStates();
+            bc.postMessage({ type: 'CMD_BLACKOUT', payload: { active: isBlackout } });
+        }
+
+        function cycleProjectorTheme() {
+            themeIndex = (themeIndex + 1) % 3;
+            updateScratchpadThemeClass();
+            bc.postMessage({ type: 'CMD_THEME_LAYOUT', payload: { themeIndex, splitLayout, choiceLayout } });
+            const names = ['Bảng phấn', 'Bảng trắng', 'Nền tối'];
+            showToast('🎨 Máy chiếu: ' + names[themeIndex]);
+        }
+
+        function updateScratchpadThemeClass() {
+            const layer = document.getElementById('pvScratchpadLayer');
+            if (!layer) return;
+            layer.classList.remove('theme-0', 'theme-1', 'theme-2');
+            layer.classList.add('theme-' + (themeIndex % 3));
+        }
+
+        function toggleProjectorScratchpad() {
+            isScratchpadActive = !isScratchpadActive;
+            const layer = document.getElementById('pvScratchpadLayer');
+            const btn = document.getElementById('pvBtnScratchpad');
+            updateScratchpadThemeClass();
+            if (layer) layer.classList.toggle('active', isScratchpadActive);
+            if (btn) {
+                btn.classList.toggle('active', isScratchpadActive);
+                btn.textContent = isScratchpadActive ? '↩️ Đóng Bảng nháp (W)' : '📝 Bảng nháp (W)';
+            }
+            if (isScratchpadActive && !isTeacherDrawActive) {
+                toggleTeacherDraw();
+            }
+            redrawTeacherCanvas();
+            bc.postMessage({ type: 'CMD_SCRATCHPAD', payload: { active: isScratchpadActive } });
+            showToast(isScratchpadActive ? '📝 Đã bật Bảng nháp trống trên Máy chiếu' : '↩️ Đã quay lại câu hỏi trên Máy chiếu');
+        }
+
+        function toggleProjectorSplit() {
+            splitLayout = !splitLayout;
+            bc.postMessage({ type: 'CMD_THEME_LAYOUT', payload: { themeIndex, splitLayout, choiceLayout } });
+            showToast(splitLayout ? '🖼️ Máy chiếu: Bật bố cục 2 cột' : '🖼️ Máy chiếu: Tắt bố cục 2 cột');
+        }
+
+        function clearProjectorDrawing() {
+            clearTeacherPreviewCanvas();
+            bc.postMessage({ type: 'CMD_CLEAR_DRAW', payload: {} });
+        }
+
+        function exitPresenterMode() {
+            bc.postMessage({ type: 'CMD_CLOSE_PROJECTOR', payload: {} });
+            if (window.parent && window.parent !== window && typeof window.parent.exitDualScreenMode === 'function') {
+                window.parent.exitDualScreenMode();
+            } else {
+                window.close();
+            }
+        }
+
+        function reopenProjectorWindow() {
+            if (window.parent && window.parent !== window && typeof window.parent.openProjectorWindow === 'function') {
+                window.parent.openProjectorWindow();
+            } else {
+                window.open(`/?mode=projector&channel=${encodeURIComponent(channelId)}`, 'MathProjectorView', 'width=1280,height=720');
+            }
+        }
+
+        // AI Giải đề trực tiếp từ Tab Giáo viên
+        async function solveCurrentWithAI() {
+            const slide = slides[currentIndex];
+            if (!slide) return;
+            const btn = document.getElementById('pvBtnAiSolve');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Đang giải...';
+
+            try {
+                let keys = [];
+                try {
+                    const rawPool = localStorage.getItem('gemini_api_keys_pool');
+                    if (rawPool) keys = JSON.parse(rawPool);
+                } catch {}
+
+                const resp = await fetch('/api/ai-solve-question', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_text: (slide.questionText || '').replace(/___PRES_IMAGE___/g, '').trim(),
+                        choices: slide.choices || [],
+                        api_keys: JSON.stringify(keys),
+                        model_name: 'auto'
+                    })
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Không thể gọi Gemini AI giải đề');
+                }
+                const data = await resp.json();
+                slide.solution = data.solution;
+                if (data.correct_label && slide.choices) {
+                    slide.choices.forEach(c => {
+                        if (c.label && c.label.toUpperCase().startsWith(data.correct_label)) {
+                            c.isCorrect = true;
+                        }
+                    });
+                }
+                renderAll();
+                bc.postMessage({
+                    type: 'CMD_UPDATE_SLIDE_DATA',
+                    payload: { index: currentIndex, slidePatch: { solution: slide.solution, choices: slide.choices } }
+                });
+                showToast(`🎉 AI đã giải xong Câu ${currentIndex + 1}!`);
+            } catch (err) {
+                alert('Lỗi Gemini AI giải đề: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        }
+
+        // Vẽ đồng bộ từ khung Preview của Giáo viên lên Máy chiếu (Stroke Stack + Đa công cụ)
+        function getActiveTeacherStrokeStack() {
+            return isScratchpadActive ? teacherScratchpadStrokes : teacherSlideStrokes;
+        }
+
+        function getTeacherStrokeWidth(mode, forProjector = false) {
+            if (mode === 'highlighter') return forProjector ? 20 : 12;
+            if (mode === 'eraser') return forProjector ? 26 : 16;
+            return forProjector ? 3.5 : 2.5;
+        }
+
+        function renderTeacherStroke(ctx, canvas, stroke) {
+            if (!ctx || !canvas || !stroke || !stroke.points || stroke.points.length === 0) return;
+            const w = canvas.width;
+            const h = canvas.height;
+            const mode = stroke.mode || 'pen';
+            const color = stroke.color || '#facc15';
+            const lineWidth = stroke.localWidth || getTeacherStrokeWidth(mode, false);
+
+            ctx.save();
+            ctx.beginPath();
+            const p0 = stroke.points[0];
+            ctx.moveTo(p0[0] * w, p0[1] * h);
+            if (stroke.points.length === 1) {
+                ctx.lineTo(p0[0] * w + 0.1, p0[1] * h + 0.1);
+            } else {
+                for (let i = 1; i < stroke.points.length; i++) {
+                    ctx.lineTo(stroke.points[i][0] * w, stroke.points[i][1] * h);
+                }
+            }
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = lineWidth;
+
+            if (mode === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = 'rgba(0,0,0,1)';
+            } else if (mode === 'highlighter') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = color;
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = color;
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function redrawTeacherCanvas() {
+            const canvas = document.getElementById('pvDrawCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const stack = getActiveTeacherStrokeStack();
+            for (let i = 0; i < stack.length; i++) {
+                renderTeacherStroke(ctx, canvas, stack[i]);
+            }
+        }
+
+        function setTeacherDrawColor(color) {
+            teacherDrawColor = color;
+            if (teacherDrawMode === 'eraser') {
+                setTeacherDrawMode('pen');
+            }
+            document.querySelectorAll('#pvDrawToolbar .pv-color-dot').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === color);
+            });
+        }
+
+        function setTeacherDrawMode(mode) {
+            teacherDrawMode = mode;
+            const btnPen = document.getElementById('pvModePen');
+            const btnHi = document.getElementById('pvModeHighlight');
+            const btnEr = document.getElementById('pvModeEraser');
+            if (btnPen) btnPen.classList.toggle('active', mode === 'pen');
+            if (btnHi) btnHi.classList.toggle('active', mode === 'highlighter');
+            if (btnEr) btnEr.classList.toggle('active', mode === 'eraser');
+        }
+
+        function undoTeacherDrawing() {
+            const stack = getActiveTeacherStrokeStack();
+            if (stack.length === 0) return;
+            stack.pop();
+            redrawTeacherCanvas();
+            bc.postMessage({ type: 'CMD_UNDO_DRAW', payload: {} });
+        }
+
+        function initTeacherDrawCanvas() {
+            const canvas = document.getElementById('pvDrawCanvas');
+            const wrap = document.getElementById('pvPreviewWrap');
+            if (!canvas || !wrap) return;
+
+            const resize = () => {
+                canvas.width = wrap.clientWidth;
+                canvas.height = wrap.clientHeight;
+                redrawTeacherCanvas();
+            };
+            resize();
+            window.addEventListener('resize', resize);
+
+            const getNormCoords = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const cx = e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
+                const cy = e.touches && e.touches.length ? e.touches[0].clientY : e.clientY;
+                return {
+                    nx: Math.max(0, Math.min(1, (cx - rect.left) / (rect.width || 1))),
+                    ny: Math.max(0, Math.min(1, (cy - rect.top) / (rect.height || 1))),
+                    px: cx - rect.left,
+                    py: cy - rect.top,
+                };
+            };
+
+            const startDraw = (e) => {
+                if (!isTeacherDrawActive) return;
+                if (e.cancelable) e.preventDefault();
+                isMouseDown = true;
+                const { nx, ny } = getNormCoords(e);
+                lastNormX = nx;
+                lastNormY = ny;
+
+                const strokeId = 'pv_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+                const projWidth = getTeacherStrokeWidth(teacherDrawMode, true);
+                const localWidth = getTeacherStrokeWidth(teacherDrawMode, false);
+                teacherCurrentStroke = {
+                    id: strokeId,
+                    points: [[nx, ny]],
+                    color: teacherDrawColor,
+                    width: projWidth,
+                    localWidth: localWidth,
+                    mode: teacherDrawMode,
+                };
+                getActiveTeacherStrokeStack().push(teacherCurrentStroke);
+
+                const ctx = canvas.getContext('2d');
+                if (teacherDrawMode === 'highlighter') {
+                    redrawTeacherCanvas();
+                } else {
+                    renderTeacherStroke(ctx, canvas, teacherCurrentStroke);
+                }
+
+                bc.postMessage({
+                    type: 'CMD_DRAW_STROKE',
+                    payload: {
+                        strokeId,
+                        phase: 'start',
+                        nx, ny,
+                        x1: nx, y1: ny, x2: nx, y2: ny,
+                        color: teacherDrawColor,
+                        width: projWidth,
+                        mode: teacherDrawMode,
+                    }
+                });
+            };
+
+            const moveDraw = (e) => {
+                if (!isTeacherDrawActive || !isMouseDown || !teacherCurrentStroke) return;
+                if (e.cancelable) e.preventDefault();
+                const { nx, ny } = getNormCoords(e);
+                teacherCurrentStroke.points.push([nx, ny]);
+                const ctx = canvas.getContext('2d');
+
+                if (teacherCurrentStroke.mode === 'highlighter') {
+                    redrawTeacherCanvas();
+                } else {
+                    renderTeacherStroke(ctx, canvas, {
+                        points: [[lastNormX, lastNormY], [nx, ny]],
+                        color: teacherCurrentStroke.color,
+                        localWidth: teacherCurrentStroke.localWidth,
+                        mode: teacherCurrentStroke.mode,
+                    });
+                }
+
+                bc.postMessage({
+                    type: 'CMD_DRAW_STROKE',
+                    payload: {
+                        strokeId: teacherCurrentStroke.id,
+                        phase: 'move',
+                        x1: lastNormX, y1: lastNormY,
+                        x2: nx, y2: ny,
+                        nx, ny,
+                        color: teacherCurrentStroke.color,
+                        width: teacherCurrentStroke.width,
+                        mode: teacherCurrentStroke.mode,
+                    }
+                });
+                lastNormX = nx;
+                lastNormY = ny;
+            };
+
+            const endDraw = () => {
+                if (isMouseDown && teacherCurrentStroke) {
+                    bc.postMessage({
+                        type: 'CMD_DRAW_STROKE',
+                        payload: { strokeId: teacherCurrentStroke.id, phase: 'end' }
+                    });
+                }
+                isMouseDown = false;
+                teacherCurrentStroke = null;
+            };
+
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', moveDraw);
+            window.addEventListener('mouseup', endDraw);
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', moveDraw, { passive: false });
+            window.addEventListener('touchend', endDraw);
+        }
+
+        function toggleTeacherDraw() {
+            isTeacherDrawActive = !isTeacherDrawActive;
+            const canvas = document.getElementById('pvDrawCanvas');
+            const btn = document.getElementById('pvBtnDrawSync');
+            const toolbar = document.getElementById('pvDrawToolbar');
+            const wrap = document.getElementById('pvPreviewWrap');
+            if (isTeacherDrawActive) {
+                canvas.width = wrap.clientWidth;
+                canvas.height = wrap.clientHeight;
+                redrawTeacherCanvas();
+                canvas.classList.add('active');
+                if (btn) btn.classList.add('active');
+                if (toolbar) toolbar.classList.add('active');
+                showToast('✏️ Đang bật bảng phấn đa năng đồng bộ sang Máy chiếu');
+            } else {
+                canvas.classList.remove('active');
+                if (btn) btn.classList.remove('active');
+                if (toolbar) toolbar.classList.remove('active');
+            }
+        }
+
+        function clearTeacherPreviewCanvas() {
+            if (isScratchpadActive) {
+                teacherScratchpadStrokes = [];
+            } else {
+                teacherSlideStrokes = [];
+            }
+            const canvas = document.getElementById('pvDrawCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Đồng hồ & Timer
+        function formatMMSS(sec) {
+            const m = Math.floor(Math.abs(sec) / 60);
+            const s = Math.abs(sec) % 60;
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function updateTimerDisplays() {
+            document.getElementById('pvSessionStopwatch').textContent = formatMMSS(sessionSeconds);
+            const qEl = document.getElementById('pvQuestionTimer');
+            qEl.textContent = formatMMSS(questionSecondsLeft);
+            qEl.classList.remove('warn', 'expired');
+            if (questionSecondsLeft === 0) qEl.classList.add('expired');
+            else if (questionSecondsLeft <= 10) qEl.classList.add('warn');
+
+            const now = new Date();
+            document.getElementById('pvWallClock').textContent = now.toLocaleTimeString('vi-VN');
+        }
+
+        function syncTimerToProjector() {
+            bc.postMessage({
+                type: 'CMD_TIMER_SYNC',
+                payload: {
+                    visible: isTimerShownOnProjector,
+                    secondsLeft: questionSecondsLeft,
+                    running: isQuestionTimerRunning,
+                    presetSeconds: timerPresetSeconds,
+                }
+            });
+        }
+
+        function toggleTimerOnProjector() {
+            isTimerShownOnProjector = !isTimerShownOnProjector;
+            const btn = document.getElementById('pvBtnShowTimerOnProjector');
+            if (btn) {
+                btn.classList.toggle('active', isTimerShownOnProjector);
+                btn.textContent = isTimerShownOnProjector
+                    ? '📺 Hiện giờ: Bật'
+                    : '📺 Hiện giờ: Tắt';
+            }
+            syncTimerToProjector();
+            showToast(isTimerShownOnProjector ? '📺 Đã hiện đồng hồ đếm ngược trên Máy chiếu' : '📺 Đã ẩn đồng hồ trên Máy chiếu');
+        }
+
+        function changeProjectorFontSize(delta) {
+            bc.postMessage({ type: 'CMD_FONT_SIZE', payload: { action: 'delta', delta } });
+        }
+
+        function resetProjectorFontSize() {
+            bc.postMessage({ type: 'CMD_FONT_SIZE', payload: { action: 'reset' } });
+            const badge = document.getElementById('pvFontSizeBadge');
+            if (badge) badge.textContent = 'Cỡ chữ: Tự động';
+            showToast('🔤 Đã đặt cỡ chữ Máy chiếu về Tự động');
+        }
+
+        function updateScreenExtendBadge() {
+            const badge = document.getElementById('pvScreenBadge');
+            if (!badge) return;
+            const isExt = Boolean(window.screen && window.screen.isExtended);
+            if (isExt) {
+                badge.textContent = '🖥️ Đã phát hiện 2 Màn (Extend)';
+                badge.className = 'pv-badge connected';
+            } else {
+                badge.textContent = '⚠️ 1 Màn hình (Win+P → Extend)';
+                badge.className = 'pv-badge waiting';
+            }
+        }
+
+        async function moveProjectorToScreen2() {
+            if (window.parent && window.parent !== window && typeof window.parent.moveProjectorToSecondScreen === 'function') {
+                const res = await window.parent.moveProjectorToSecondScreen();
+                if (res && res.moved) {
+                    showToast('🖥️ Đã tự động đưa cửa sổ Máy chiếu sang Màn hình 2!');
+                } else if (res && res.denied) {
+                    showToast('⚠️ Hãy cho phép quyền "Quản lý cửa sổ nhiều màn hình" trên Chrome/Edge để tự bay sang Màn 2.');
+                } else if (res && res.screenCount === 1) {
+                    showToast('⚠️ Chưa phát hiện màn hình thứ 2. Hãy bấm Win + P → chọn Mở rộng (Extend).');
+                } else {
+                    showToast('💡 Kéo cửa sổ Máy chiếu sang màn HDMI rồi bấm F11 để Toàn màn hình.');
+                }
+            } else {
+                reopenProjectorWindow();
+            }
+            updateScreenExtendBadge();
+        }
+
+        function toggleQuestionTimer() {
+            isQuestionTimerRunning = !isQuestionTimerRunning;
+            const btn = document.getElementById('pvTimerToggleBtn');
+            btn.textContent = isQuestionTimerRunning ? '⏸ Dừng' : '▶ Chạy';
+            if (isTimerShownOnProjector) syncTimerToProjector();
+        }
+
+        function resetQuestionTimer() {
+            questionSecondsLeft = timerPresetSeconds;
+            updateTimerDisplays();
+            if (isTimerShownOnProjector) syncTimerToProjector();
+        }
+
+        function setQuestionTimerPreset(sec) {
+            timerPresetSeconds = sec;
+            questionSecondsLeft = sec;
+            updateTimerDisplays();
+            if (isTimerShownOnProjector) syncTimerToProjector();
+        }
+
+        function resetSessionStopwatch() {
+            sessionSeconds = 0;
+            updateTimerDisplays();
+        }
+
+        setInterval(() => {
+            sessionSeconds++;
+            if (isQuestionTimerRunning && questionSecondsLeft > 0) {
+                questionSecondsLeft--;
+            }
+            updateTimerDisplays();
+            if (isTimerShownOnProjector) {
+                syncTimerToProjector();
+            }
+
+            // Kiểm tra kết nối Máy chiếu
+            const badge = document.getElementById('pvConnBadge');
+            if (Date.now() - lastProjectorPing < 4500) {
+                badge.textContent = '🟢 Đã kết nối Máy chiếu';
+                badge.className = 'pv-badge connected';
+            } else {
+                badge.textContent = '🟡 Đang chờ Máy chiếu...';
+                badge.className = 'pv-badge waiting';
+            }
+        }, 1000);
+
+        // Lắng nghe BroadcastChannel
+        bc.onmessage = (event) => {
+            const { type, payload } = event.data || {};
+            if (!type) return;
+
+            if (type === 'SYNC_FULL_STATE') {
+                slides = payload.slides || [];
+                currentIndex = payload.currentIndex || 0;
+                sessionId = payload.sessionId || '';
+                docTitle = payload.docTitle || 'Đề thi Toán học';
+                themeIndex = payload.themeIndex || 0;
+                isSolutionVisible = Boolean(payload.isSolutionVisible);
+                isBlackout = Boolean(payload.isBlackout);
+                splitLayout = payload.splitLayout !== false;
+                choiceLayout = payload.choiceLayout || 'auto';
+
+                const savedNotes = loadSavedNotes();
+                slides.forEach((s, i) => {
+                    if (!s.teacherNote && savedNotes[i]) s.teacherNote = savedNotes[i];
+                });
+                updateScratchpadThemeClass();
+                renderAll();
+            } else if (type === 'CMD_GOTO_SLIDE') {
+                if (typeof payload.index === 'number' && payload.index !== currentIndex) {
+                    currentIndex = payload.index;
+                    isSolutionVisible = false;
+                    clearTeacherPreviewCanvas();
+                    renderAll();
+                }
+            } else if (type === 'CMD_TOGGLE_SOLUTION') {
+                isSolutionVisible = Boolean(payload.visible);
+                updateControlStates();
+            } else if (type === 'CMD_BLACKOUT') {
+                isBlackout = Boolean(payload.active);
+                updateControlStates();
+            } else if (type === 'SYNC_FONT_SIZE' && payload) {
+                const badge = document.getElementById('pvFontSizeBadge');
+                if (badge) {
+                    badge.textContent = payload.isAuto
+                        ? 'Cỡ chữ: Tự động'
+                        : `Cỡ chữ: ${payload.fontSize}px`;
+                }
+            } else if (type === 'PING_STATUS' && payload && payload.role === 'projector') {
+                lastProjectorPing = Date.now();
+            }
+        };
+
+        // Ghi chú tự động lưu
+        document.getElementById('pvTeacherNote').addEventListener('input', (e) => {
+            saveNoteForCurrentSlide(e.target.value);
+        });
+
+        // Phím tắt & Clicker
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+                e.preventDefault();
+                undoTeacherDrawing();
+                return;
+            }
+            switch (e.key) {
+                case 'ArrowRight':
+                case 'PageDown':
+                    e.preventDefault();
+                    nextSlide();
+                    break;
+                case 'ArrowLeft':
+                case 'PageUp':
+                    e.preventDefault();
+                    prevSlide();
+                    break;
+                case ' ':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    toggleProjectorSolution();
+                    break;
+                case 'b':
+                case 'B':
+                    e.preventDefault();
+                    toggleProjectorBlackout();
+                    break;
+                case 'z':
+                case 'Z':
+                    e.preventDefault();
+                    toggleProjectorZoom();
+                    break;
+                case 'l':
+                case 'L':
+                    e.preventDefault();
+                    toggleTeacherLaser();
+                    break;
+                case 'p':
+                case 'P':
+                    e.preventDefault();
+                    toggleTeacherDraw();
+                    break;
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    toggleProjectorScratchpad();
+                    break;
+                case '+':
+                case '=':
+                    e.preventDefault();
+                    changeProjectorFontSize(2);
+                    break;
+                case '-':
+                case '_':
+                    e.preventDefault();
+                    changeProjectorFontSize(-2);
+                    break;
+            }
+        });
+
+        // Khởi tạo
+        initTeacherDrawCanvas();
+        initLaserPointerSync();
+        updateTimerDisplays();
+        updateScreenExtendBadge();
+        setInterval(updateScreenExtendBadge, 3000);
+        bc.postMessage({ type: 'SYNC_HANDSHAKE_REQ', payload: { role: 'presenter' } });
+    </script>
+</body>
+</html>
